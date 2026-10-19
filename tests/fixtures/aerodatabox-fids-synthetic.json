@@ -1,0 +1,38 @@
+{
+  "_note": "SYNTHETIC test data written by hand to match the AeroDataBox OpenAPI spec (FIDS with withLeg=true). Not real flights. Replace with a recorded response once a key is available.",
+  "departures": [
+    {
+      "departure": { "airport": { "icao": "LROP", "iata": "OTP", "name": "Bucharest Henri Coanda" }, "scheduledTime": { "utc": "2026-10-19 13:30Z", "local": "2026-10-19 16:30+03:00" }, "revisedTime": { "utc": "2026-10-19 13:55Z", "local": "2026-10-19 16:55+03:00" }, "terminal": "1", "gate": "B4", "checkInDesk": "21-24", "quality": ["Basic", "Live"] },
+      "arrival": { "airport": { "icao": "EGLL", "iata": "LHR", "name": "London Heathrow", "shortName": "Heathrow", "municipalityName": "London", "countryCode": "GB", "timeZone": "Europe/London" }, "scheduledTime": { "utc": "2026-10-19 16:45Z", "local": "2026-10-19 17:45+01:00" }, "terminal": "4", "quality": ["Basic"] },
+      "number": "TEST 391", "callSign": "TST391", "status": "Delayed", "codeshareStatus": "IsOperator", "isCargo": false,
+      "aircraft": { "reg": "YR-TST", "modeS": "4A0000", "model": "Example Jet 100", "image": { "url": "https://example.org/photo.jpg", "webUrl": "https://example.org/photo-page", "author": "Example Author", "title": "Example", "license": "AttributionShareAlikeCC", "htmlAttributions": ["Example Author, CC BY-SA"] } },
+      "airline": { "name": "Test Air", "iata": "TS", "icao": "TST" },
+      "greatCircleDistance": { "meter": 2097000, "km": 2097.4, "mile": 1303.3, "nm": 1132.5, "feet": 6880000 },
+      "lastUpdatedUtc": "2026-10-19 12:40Z"
+    },
+    {
+      "departure": { "airport": { "iata": "OTP", "name": "Bucharest" }, "scheduledTime": { "utc": "2026-10-19 12:10Z", "local": "2026-10-19 15:10+03:00" }, "quality": ["Basic"] },
+      "arrival": { "airport": { "iata": "CLJ", "name": "Cluj-Napoca", "municipalityName": "Cluj-Napoca", "countryCode": "RO" }, "quality": ["Basic"] },
+      "number": "TEST 7", "status": "Unknown", "codeshareStatus": "Unknown", "isCargo": false,
+      "aircraft": {},
+      "airline": { "name": "Test Regional" }
+    },
+    {
+      "departure": { "airport": { "iata": "OTP", "name": "Bucharest" }, "scheduledTime": { "utc": "2026-10-19 14:00Z", "local": "2026-10-19 17:00+03:00" }, "quality": ["Basic", "Live"] },
+      "arrival": { "airport": { "iata": "VIE", "name": "Vienna", "municipalityName": "Vienna", "countryCode": "AT" }, "scheduledTime": { "utc": "2026-10-19 15:35Z", "local": "2026-10-19 17:35+02:00" }, "quality": ["Basic"] },
+      "number": "TEST 12", "status": "Canceled", "codeshareStatus": "IsOperator", "isCargo": false,
+      "aircraft": { "model": "Example Prop 70" },
+      "airline": { "name": "Test Air", "iata": "TS" }
+    }
+  ],
+  "arrivals": [
+    {
+      "departure": { "airport": { "iata": "FRA", "name": "Frankfurt", "municipalityName": "Frankfurt am Main", "countryCode": "DE" }, "scheduledTime": { "utc": "2026-10-19 09:20Z", "local": "2026-10-19 11:20+02:00" }, "quality": ["Basic"] },
+      "arrival": { "airport": { "iata": "OTP", "name": "Bucharest" }, "scheduledTime": { "utc": "2026-10-19 11:50Z", "local": "2026-10-19 14:50+03:00" }, "revisedTime": { "utc": "2026-10-19 11:42Z", "local": "2026-10-19 14:42+03:00" }, "runwayTime": { "utc": "2026-10-19 11:38Z", "local": "2026-10-19 14:38+03:00" }, "terminal": "1", "baggageBelt": "3", "quality": ["Basic", "Live"] },
+      "number": "TEST 1650", "status": "Arrived", "codeshareStatus": "IsOperator", "isCargo": false,
+      "aircraft": { "reg": "D-TEST", "model": "Example Jet 200" },
+      "airline": { "name": "Test Lines", "iata": "TL", "icao": "TLN" },
+      "greatCircleDistance": { "meter": 1450000, "km": 1450.2, "mile": 901, "nm": 783, "feet": 4757000 }
+    }
+  ]
+}
