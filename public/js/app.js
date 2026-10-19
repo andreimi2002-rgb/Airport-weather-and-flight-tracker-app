@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, notFoundMessage } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -370,8 +370,13 @@ const isPast = (f, now = Date.now()) => {
   return false;
 };
 
+// Live statuses found by the flight drawer, by flight id. Kept across board
+// refreshes; statusView ignores them once they are older than LIVE_FRESH_MS.
+const liveSeen = new Map();
+const stOf = (f, now) => statusView(f, now, liveSeen.get(f.id));
+
 function rowHtml(f, now) {
-  const o = other(f), h = here(f), st = statusView(f, now), up = updateTime(f);
+  const o = other(f), h = here(f), st = stOf(f, now), up = updateTime(f);
   const late = lateMinutes(f);
   const sched = hhmm(h.scheduled);
   const changed = up.time !== "—" && up.time !== sched;
@@ -408,13 +413,13 @@ function renderFlights() {
   const now = Date.now();
 
   const sel = $("statusFilter"), chosen = sel.value;
-  const labels = [...new Set(flights.map(f => statusView(f, now).label))].sort();
+  const labels = [...new Set(flights.map(f => stOf(f, now).label))].sort();
   sel.innerHTML = `<option value="all">All statuses</option>` + labels.map(l => `<option${l === chosen ? " selected" : ""}>${esc(l)}</option>`).join("");
   const status = labels.includes(chosen) ? chosen : "all";
 
   const list = flights
     .filter(f => !want || f.direction === want)
-    .filter(f => status === "all" || statusView(f, now).label === status)
+    .filter(f => status === "all" || stOf(f, now).label === status)
     .filter(f => !hidePast || !isPast(f, now))
     .filter(f => [f.number, f.airline.name, f.airline.iata, placeName(other(f).airport), other(f).airport.iata, other(f).airport.name, f.aircraft.model, f.aircraft.registration, here(f).gate].join(" ").toLowerCase().includes(term))
     .sort((x, y) => sortKey(x).localeCompare(sortKey(y)));
@@ -527,7 +532,7 @@ const fieldHtml = (label, value, mono) => `<div class="field"><small>${label}</s
 function renderFlightDrawer() {
   if (!fd) return;
   const f = fd.flight, a = fd.aircraft, now = Date.now();
-  const st = statusView(f, now);
+  const st = stOf(f, now);
   const dep = f.departure, arr = f.arrival;
   const depAp = lookup(dep.airport.iata), arrAp = lookup(arr.airport.iata);
   const prog = f.demo ? { state: null } : flightProgress(f, now);
@@ -545,9 +550,18 @@ function renderFlightDrawer() {
   }
   // Only "Landed" when the provider reports it; otherwise the arrival was due, not confirmed.
   else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? `Landed ${relative(arr.runway || arr.revised || arr.scheduled)}` : `Arrival was due ${relative(arr.runway || arr.revised || arr.scheduled)} · landing not reported yet`}</span><span></span>`;
+  // Fresh live data: the line shows where the aircraft really is.
+  const ls = st.live ? liveSeen.get(f.id) : null;
+  if (ls && fd.live) {
+    const pos = { lat: fd.live.lat, lon: fd.live.lon }, done = haversineKm(depAp, pos), left = haversineKm(pos, arrAp);
+    const seen = `seen ${relative({ utc: fd.live.seenAt })}`;
+    if (ls.key === "landed") { prog.state = "after"; prog.pct = 100; trackNote = `<span>Landed · on the ground at ${esc(arrAp.iata)} (live data, ${seen})</span><span></span>`; }
+    else if (ls.key === "ground") { prog.state = "before"; prog.pct = 0; trackNote = `<span>On the ground at ${esc(depAp.iata)} (live data, ${seen})</span><span></span>`; }
+    else if (done !== null && left !== null) { prog.state = "air"; prog.live = true; prog.pct = Math.round((100 * done) / (done + left)); trackNote = `<span>Live position · ${fmtNum(left)} km to ${esc(arrAp.iata)}</span><span>${seen}</span>`; }
+  }
   const pct = prog.pct ?? 0;
   const track = prog.state
-    ? `<div class="track" title="${prog.state === "air" ? "Estimated from the departure and arrival times, not a live position" : ""}"><div class="done" style="width:${pct}%"></div><div class="pt on" style="left:0"></div><div class="pt ${pct >= 100 ? "on" : ""}" style="left:100%"></div>${prog.state === "air" ? `<div class="plane" style="left:${pct}%">✈</div>` : ""}</div><div class="track-note">${trackNote}</div>`
+    ? `<div class="track" title="${prog.state === "air" ? (prog.live ? "Live position from ADS-B data" : "Estimated from the departure and arrival times, not a live position") : ""}"><div class="done" style="width:${pct}%"></div><div class="pt on" style="left:0"></div><div class="pt ${pct >= 100 ? "on" : ""}" style="left:100%"></div>${prog.state === "air" ? `<div class="plane" style="left:${pct}%">✈</div>` : ""}</div><div class="track-note">${trackNote}</div>`
     : `<div class="track"><div class="pt on" style="left:0"></div><div class="pt" style="left:100%"></div></div>`;
 
   const routeEnd = (m, ap, cls) => `<div class="route-end ${cls}"><div class="rc">${esc(m.airport.iata || "—")}</div><div class="rn">${esc(m.airport.name || ap?.name || NA)}</div><div class="rs">${esc([m.airport.city || ap?.city, ap?.country].filter(Boolean).join(", "))}</div></div>`;
@@ -614,6 +628,15 @@ function renderFlightDrawer() {
   if (btn) btn.onclick = checkFlight;
 }
 
+// The drawer found this flight's aircraft in live data: keep it for the
+// "Live now" fields, and its live status for the drawer and the board row.
+function setLive(f, ac) {
+  fd.live = ac;
+  const st = liveStatus(f, ac, lookup(f.departure.airport.iata), lookup(f.arrival.airport.iata));
+  if (st) liveSeen.set(f.id, st); else liveSeen.delete(f.id);
+  renderFlights();
+}
+
 const onlyReg = reg => ({ registration: reg, ageYears: null, seats: null, engines: null, engineType: null, deliveryDate: null, airline: null });
 const AIRBORNE = ["departed", "en-route", "approaching"];
 
@@ -632,7 +655,7 @@ async function lookupAircraft(f) {
       try {
         const body = await fetchLive(cand.callsign);
         if (fd?.flight !== f) return;
-        if (body.aircraft?.registration && !typeConflicts(body.aircraft.typeCode, f.aircraft.model)) { reg = body.aircraft.registration; regFrom = "adsb"; fd.live = body.aircraft; }
+        if (body.aircraft?.registration && !typeConflicts(body.aircraft.typeCode, f.aircraft.model)) { reg = body.aircraft.registration; regFrom = "adsb"; setLive(f, body.aircraft); }
       } catch { /* try the route match */ }
     }
     // 2. Airlines mostly fly under callsigns like "WMT1LH", not the flight number:
@@ -647,7 +670,7 @@ async function lookupAircraft(f) {
         if (fd?.flight !== f) return;
         const ac = body.aircraft;
         // Says exactly which step found nothing, so a screenshot shows the cause.
-        if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
+        if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; setLive(f, ac); }
         else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, a different family from the scheduled ${f.aircraft.model}`;
         else if (body.status !== "ok") why = body.notice || "live data unavailable";
         else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
@@ -658,9 +681,9 @@ async function lookupAircraft(f) {
       } catch (err) { why = "live lookup failed (" + err.message + ")"; }
     }
     if (fd?.flight !== f) return;
-  } else if (cand?.fromProvider && AIRBORNE.includes(f.status)) {
-    // Known aircraft in the air: show its live altitude and speed.
-    fetchLive(cand.callsign).then(body => { if (fd?.flight === f && body.aircraft?.registration === reg) { fd.live = body.aircraft; renderFlightDrawer(); } }).catch(() => {});
+  } else if (cand?.fromProvider && (AIRBORNE.includes(f.status) || isOverdue(f, Date.now()))) {
+    // Known aircraft in the air, or no recent report: show its live altitude, speed and status.
+    fetchLive(cand.callsign).then(body => { if (fd?.flight === f && body.aircraft?.registration === reg) { setLive(f, body.aircraft); renderFlightDrawer(); } }).catch(() => {});
   }
   if (!reg) {
     const dep = Date.parse((f.departure.revised || f.departure.scheduled)?.utc);
