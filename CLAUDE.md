@@ -98,6 +98,7 @@ In review (2026-10-19): `feature/aircraft-page` (A2, branched from `feature/live
 A1 and A2 merged (PR #15, #16), A2 verified in production.
 
 In review (2026-10-19): `feature/wall-board` (A3, item 6). `/board/<IATA>` (netlify.toml rewrite to `public/board.html`, script `public/js/wall.js`, pure logic in `public/js/wall-model.js`): departures and arrivals side by side, rows that fit the screen, pages rotate every 12 s on screens >= 900 px, one scrolling column below that. Upcoming flights plus finished ones for 20 min (unfinished with a passed time for 60 min). Owner's choice for units: reloads flights once an hour, never 00:00-05:00 airport time, only while the page is visible (closed/hidden tab = no calls). Weather every 15 min (free function). Full screen button; "Keep screen on" (Wake Lock) only when pressed. Home airport: "Home" button in the hero (localStorage `airportLive.home`); `/` opens home, else the last airport; marked ⌂ in the quick bar. "Wall board" link next to the flight board heading.
+Later (owner, 2026-10-19): make wall board items clickable (a row opens the flight details, e.g. `/airport/OTP?flight=…`; registration -> aircraft page; city -> that airport). Owner is fine with the read-only version for now.
 
 Next: airline logos: owner chose Wikimedia Commons logos prepared ahead by a script (free licences only, many PD-textlogo), stored in the repo, coloured badge as fallback.
 
