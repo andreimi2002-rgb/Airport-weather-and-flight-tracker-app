@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1017">
+<title>Aircraft — Airport Live</title>
+<link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/js/aircraft-page.js"></script>
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M21 15.5v-1.7l-7.6-4.6V4.3a1.4 1.4 0 0 0-2.8 0v4.9L3 13.8v1.7l7.6-2.3v4.9l-2 1.5V21l3.4-1 3.4 1v-1.4l-2-1.5v-4.9z"/></svg></div><div><div class="brandname">Airport Live</div><div class="brandline">Airport, at a glance.</div></div></a>
+    <nav class="quick" aria-label="Back"><a class="ghost" href="/" id="backLink">← Airports</a></nav>
+    <div class="top-actions">
+      <form class="reg-search" id="regForm" role="search"><span aria-hidden="true">⌕</span><input id="regInput" type="search" placeholder="Registration, e.g. YR-ASA" aria-label="Aircraft registration" autocomplete="off" spellcheck="false" autocapitalize="characters"></form>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+<section class="panel status-view" id="statusView"><h2 id="statusTitle">Loading aircraft…</h2><p id="statusText"></p></section>
+
+<main id="acView" hidden>
+  <section class="ac-hero">
+    <div class="plane-photo" id="acPhoto"><span class="photo-note" id="acPhotoNote">Looking for a photo…</span></div>
+    <div class="ac-head">
+      <div class="eyebrow">Aircraft</div>
+      <h1 class="ac-reg" id="acReg">—</h1>
+      <div class="ac-model" id="acModel">—</div>
+      <div class="ac-status"><span class="status landed" id="acStatus">Checking live data…</span><span class="note" id="acSeen"></span></div>
+      <div class="grid3" id="acLive"></div>
+      <div class="note" id="acLiveNote"></div>
+    </div>
+  </section>
+
+  <div class="section-head"><div><h2>Current flight</h2><div class="section-note">From live ADS-B data, only when the aircraft is transmitting.</div></div></div>
+  <section class="panel" id="acFlight"><div class="note">Checking live data…</div></section>
+
+  <div class="section-head"><div><h2>Aircraft details</h2><div class="section-note" id="acDetailsNote">From AeroDataBox.</div></div></div>
+  <section class="panel"><div class="ac-details" id="acDetails"></div></section>
+
+  <div class="section-head"><div><h2>Flight history</h2><div class="section-note">This aircraft's flights on one day. Loaded only when you ask: each day uses 2 of the 400 monthly flight-data units.</div></div></div>
+  <section class="panel">
+    <div class="hist-controls"><select class="filterbtn" id="histDate" aria-label="Day"></select><button class="primary" id="histBtn" type="button">Load flight history (uses 2 units)</button><span class="note" id="histNote"></span></div>
+    <div class="hist" id="histList"></div>
+  </section>
+
+  <div class="demo-banner">ⓘ <span><b>Prototype.</b> Photo: Planespotters.net (photographer credited on the photo) or AeroDataBox. Details and history: AeroDataBox. Position: adsb.lol (ODbL). Callsign routes: VRS standing data (CC0), shown only when the live position is on that route.</span></div>
+</main>
+
+<footer class="footer"><span>Airport Live · Prototype</span><span>Flights and aircraft details: <a href="https://aerodatabox.com/" target="_blank" rel="noopener">AeroDataBox</a> · Aircraft photos: <a href="https://www.planespotters.net/" target="_blank" rel="noopener">Planespotters.net</a> · Live aircraft: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL) · Routes: <a href="https://github.com/vradarserver/standing-data" target="_blank" rel="noopener">VRS standing data</a> (CC0) · Airport data: <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a></span></footer>
+</div>
+</body></html>

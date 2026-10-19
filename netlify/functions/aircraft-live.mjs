@@ -1,10 +1,11 @@
 // The actual aircraft, from free sources (no AeroDataBox units):
 //   GET /api/aircraft-photo/YR-ASA -> real photo of that aircraft (Planespotters.net, stored 7 days)
 //   GET /api/live/WZZ3185          -> the aircraft flying this callsign now (adsb.lol, stored 5 min)
+//   GET /api/aircraft-now/YR-ASA   -> where this aircraft is now and its route (adsb.lol + VRS, stored 2 min)
 import { getStore } from "@netlify/blobs";
 import { memoryStore } from "../lib/flights/budget.mjs";
 import { isRegistration } from "../lib/flights/details.mjs";
-import { getAircraftPhoto, getLiveAircraft, identifyFlight, isCallsign, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
+import { getAircraftPhoto, getLiveAircraft, getAircraftNow, identifyFlight, isCallsign, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
 import { findAirport, isAirportCode, iataForIcao } from "../lib/airports.mjs";
 
 const env = name => (globalThis.Netlify?.env?.get(name) ?? process.env[name]) || null;
@@ -41,7 +42,10 @@ export default async (req, context) => {
     } else if (p.reg !== undefined) {
       const reg = String(p.reg).toUpperCase();
       if (!isRegistration(reg)) return json({ error: "Use an aircraft registration, e.g. /api/aircraft-photo/YR-ASA." }, 400, 86400);
-      result = await getAircraftPhoto(reg, { store: liveStore() });
+      if (new URL(req.url).pathname.startsWith("/api/aircraft-now/")) {
+        const airportByIcao = icao => { const a = findAirport(iataForIcao(icao)); return a && { iata: a.iata, lat: a.lat, lon: a.lon }; };
+        result = await getAircraftNow(reg, { store: liveStore(), airportByIcao, dailyCap: Number(env("ADSB_DAILY_CAP")) || DEFAULT_ADSB_DAILY_CAP });
+      } else result = await getAircraftPhoto(reg, { store: liveStore() });
     } else {
       const cs = String(p.callsign || "").toUpperCase();
       if (!isCallsign(cs)) return json({ error: "Use an ICAO callsign, e.g. /api/live/WZZ3185." }, 400, 86400);
@@ -55,7 +59,7 @@ export default async (req, context) => {
 };
 
 export const config = {
-  path: ["/api/aircraft-photo/:reg", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
+  path: ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
   method: "GET",
   rateLimit: { windowLimit: 30, windowSize: 60, aggregateBy: ["ip", "domain"] },
 };

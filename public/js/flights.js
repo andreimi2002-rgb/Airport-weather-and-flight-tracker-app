@@ -115,6 +115,27 @@ export function aircraftFields(a) {
 
 // ---------- the actual aircraft from free sources ----------
 export const fetchAircraftPhoto = reg => getJSON("/api/aircraft-photo/" + encodeURIComponent(reg));
+// Where this aircraft is now (adsb.lol) and its confirmed route, if any. Free.
+export const fetchAircraftNow = reg => getJSON("/api/aircraft-now/" + encodeURIComponent(reg));
+// Its flights on one local date (AeroDataBox, 2 units): only when asked for.
+export const fetchAircraftFlights = (reg, date) => getJSON(`/api/aircraft-flights/${encodeURIComponent(reg)}/${date}`);
+
+// "yr-asa " -> "YR-ASA"; null when it can't be a registration. Search also
+// needs a hyphen or a US "N" number, so airport codes and words don't match.
+export function asRegistration(s) {
+  const r = String(s ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9-]{1,9}$/.test(r)) return null;
+  return /^[A-Z0-9]{1,2}-[A-Z0-9]{2,6}$/.test(r) || /^N[1-9][0-9]{0,4}[A-Z]{0,2}$/.test(r) ? r : null;
+}
+export const aircraftPath = reg => "/aircraft/" + encodeURIComponent(reg);
+
+// How far along A->B the aircraft is (0-100), from its live position; null without one.
+export function liveProgressPct(ac, A, B) {
+  const p = { lat: ac?.lat, lon: ac?.lon };
+  const done = haversineKm(A, p), left = haversineKm(p, B);
+  if (done === null || left === null || done + left === 0) return null;
+  return Math.round((100 * done) / (done + left));
+}
 export const fetchLive = callsign => getJSON("/api/live/" + encodeURIComponent(callsign));
 
 // ICAO callsign to look for in live ADS-B data. The provider's own callsign is

@@ -129,7 +129,7 @@ test("errors keep an older stored answer, marked stale", async () => {
 });
 
 test("function: routes and input checks", async () => {
-  assert.deepEqual(config.path, ["/api/aircraft/:reg", "/api/flight-status/:number/:date/:code"]);
+  assert.deepEqual(config.path, ["/api/aircraft/:reg", "/api/aircraft-flights/:reg/:date", "/api/flight-status/:number/:date/:code"]);
   let res = await handler(new Request("http://x/api/aircraft/bad%20reg"), { params: { reg: "bad reg" } });
   assert.equal(res.status, 400);
   res = await handler(new Request("http://x/api/flight-status/391/2026-10-19/OTP"), { params: { number: "391", date: "2026-10-19", code: "OTP" } });

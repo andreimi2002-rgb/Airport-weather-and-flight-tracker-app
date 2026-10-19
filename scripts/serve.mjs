@@ -17,6 +17,8 @@ createServer(async (req, res) => {
     [/^\/api\/(weather|flights)\/([^/]+)$/, m => [m[1], { code: m[2] }]],
     [/^\/api\/aircraft\/([^/]+)$/, m => ["flight-details", { reg: m[1] }]],
     [/^\/api\/aircraft-photo\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
+    [/^\/api\/aircraft-now\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
+    [/^\/api\/aircraft-flights\/([^/]+)\/([^/]+)$/, m => ["flight-details", { reg: m[1], date: m[2] }]],
     [/^\/api\/live\/([^/]+)$/, m => ["aircraft-live", { callsign: m[1] }]],
     [/^\/api\/identify\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["aircraft-live", { airline: m[1], number: m[2], from: m[3], to: m[4], lat: m[5], lon: m[6] }]],
     [/^\/api\/flight-status\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2], code: m[3] }]],
@@ -29,6 +31,7 @@ createServer(async (req, res) => {
     return;
   }
   if (path === "/" || path.startsWith("/airport/")) path = "/index.html";
+  if (path.startsWith("/aircraft/")) path = "/aircraft.html";
   const file = normalize(join(ROOT, path));
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {
