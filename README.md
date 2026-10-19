@@ -13,6 +13,12 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 
 - Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies; everything else says "Not available". When the registration is known, opening a flight looks up that aircraft (exact model, manufacturer, age, seats, engines, delivery date, operator, and a photo of that aircraft labelled "matched automatically"). A "Check this flight" button asks for the current status of that one flight. Flights whose time passed without any provider update say "No recent update". "Last updated" shows when the board was fetched; old data is labelled.
 
+- **Redesign (branch `feature/redesign`)**: photographic hero (airport photo as backdrop, giant code, live clock with seconds and UTC), sticky top bar with saved airports as one-click shortcuts (with their local time) and a search palette (`/` or Ctrl/⌘+K).
+- **Airport analytics, computed only from the flights on the board (no extra provider calls):** departures/arrivals with on-time/delayed/cancelled meters, on-time %, average and longest delay, traffic by hour (departures above, arrivals below, delayed part in amber, "now" marker, hover details), top destinations/origins, airlines and aircraft types.
+- **Flight board:** FIDS-style rows with a status stripe, struck-through scheduled time when it changed, delay chips (+23m), "NOW" divider, "Hide finished", search also by registration and gate. On phones the board is a card list (no more sideways scrolling).
+- **Flight drawer (FlightAware-style), with its own link (`/airport/SEA?flight=AS1221-d`):** route with both airports, scheduled duration and distance, progress estimated from the provider's departure/arrival times (labelled as such, not a live position), departure and arrival time tables (scheduled, estimated/actual, runway, terminal, gate, check-in desk/baggage belt), aircraft card and photo, timeline, and the current weather at the other airport. "Not available" where the provider gives nothing.
+- **Weather drawer** (click the weather card): decoded METAR field by field, 24-hour temperature/precipitation chart, hourly wind and rain, TAF split into its change groups (FM/TEMPO/BECMG/PROB) with readable times.
+
 ## Still demo data (clearly labelled in the app)
 - Flights, only while no AeroDataBox key is set: sample board for SEA. Other airports say flight data is not connected yet.
 - Aircraft photo in the flight detail: one illustrative Unsplash photo, labelled "not this aircraft".
@@ -46,6 +52,8 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `public/js/flight-model.js` — the normalized Flight/Aircraft model and status rules (shared with the tests)
 - `public/js/demo-data.js` — demo flights (SEA), used only while no flight key is set
 - `public/js/app.js` — page logic
+- `public/js/insights.js` — board statistics, hourly traffic, top lists, flight progress and timeline (pure functions, tested)
+- `public/js/charts.js` — the two hand-made SVG charts (traffic, forecast)
 - `netlify/functions/weather.mjs` — the `/api/weather/<IATA>` function: input check, airport lookup, cache headers, rate limit
 - `netlify/lib/weather.mjs` — calls the weather providers and decodes their answers
 - `netlify/functions/flights.mjs` — the `/api/flights/<IATA>` function

@@ -21,6 +21,8 @@ Agreed with the owner on 2026-10-19. Work in this order, one branch and one prev
 3. **Missing photos rule**: when two Wikidata items share an airport's IATA and ICAO codes (civil airport plus an air base or a closed airport: Austin, Aalborg, Bergen, Timișoara), drop items that are dissolved or military air bases, and match only if exactly one is left.
 4. **Weather panel**: clickable, with a detailed view (decoded TAF, more forecast hours, more fields).
 
+**Done in `feature/redesign` (2026-10-19):** step 4 (clickable weather with decoded METAR/TAF, 24 h chart) and part of stage A (a link per flight on the airport page, `?flight=`), plus airport analytics from the board and the phone board fix from item 6.
+
 ## Then, toward FlightAware (stages A–E)
 | Stage | What | Needs |
 |---|---|---|
