@@ -52,3 +52,18 @@ Implement items 1–3 with the design preserved, run checks, test airport switch
 6. Saved airports and shortcuts: pin multiple airports (stored locally for now), a bookmarkable URL for each airport (e.g. /airport/OTP), a "home airport" that opens by default, and a clean one-screen board view suitable for leaving open on a desktop monitor, tablet or phone.
 
 Later (not now): installable PWA polish, alerts, Explorer layer, native widget, public launch licensing review.
+
+## Progress and decisions (keep this updated after each item)
+Local copy of the repo: `C:\Users\stroe\Downloads\airport-live-repo` (open this folder in VS Code). Netlify site: `live-airport` (Deploy Previews come from pull requests; previews need Netlify team login). The `gh` CLI is not installed: push the branch and give the owner the `pull/new/<branch>` link.
+
+Done and merged:
+- Item 1 (PR #1): ~9,000 airports from OurAirports (public domain) in `public/data/airports.json`, built by `npm run build:airports`. Time zones from mwgg/Airports (MIT); unknown/conflicting time zones stay empty. Search on the device, `/airport/OTP` addresses (netlify.toml rewrite), saved airports in localStorage, demo weather only for SEA/LHR/OTP/JFK, demo flights only for SEA.
+- Item 2 (PR #2): photos from Wikidata + Wikimedia Commons, prepared by `npm run build:photos` into `public/data/photos/<letter>.json`, credited on each photo. Only public domain / CC0 / CC BY / CC BY-SA, >= 640 px, links checked. Ambiguous matches skipped, never guessed.
+
+Owner's choices so far: OurAirports for airports; mwgg for time zones; airport search on the device (no function); no build step for now (move to React/Vite only when needed); Wikimedia photos prepared ahead, not looked up live.
+
+Known gaps to revisit later (owner asked, not now): some airports have no airport or city photo (e.g. Timișoara TSR); some chosen photos look odd (satellite views, collages); Heathrow's only photo is GFDL (excluded); Dallas/Fort Worth has two cities so none is shown; on phones the flight table still scrolls sideways (planned for item 6).
+
+Next: item 3, real weather (branch `feature/weather`).
+
+Tools available for testing: Node 24 and Chrome (headless) on this machine. No Python. The Bash tool cannot read some repo files (permission denied); use the Read tool for those.
