@@ -1,6 +1,7 @@
 // Flights on the page: fetches /api/flights/<IATA> (a Netlify Function that
 // asks AeroDataBox) and turns normalized flights into what the board shows.
 import { STATUS_LABEL, isDelayed, isDone, isOverdue } from "./flight-model.js";
+import { haversineKm } from "./insights.js";
 
 // "just now", "18 min ago", "1 h 5 min ago"
 export function ago(iso, now = Date.now()) {
@@ -38,7 +39,10 @@ export const here = f => (f.direction === "departure" ? f.departure : f.arrival)
 export const other = f => (f.direction === "departure" ? f.arrival : f.departure);
 
 // Label and colour class for the status pill.
-export function statusView(f, now = Date.now()) {
+// live: liveStatus() for this flight, if any. While fresh it wins over the
+// provider's status (which can lag), except for a cancellation.
+export function statusView(f, now = Date.now(), live = null) {
+  if (live && f.status !== "cancelled" && now - Date.parse(live.at) < LIVE_FRESH_MS) return { label: live.label, cls: live.cls, live: true };
   if (isOverdue(f, now)) return { label: "No recent update", cls: "landed" };
   // Late but no explicit status yet: say "Delayed". Boarding, gate closed etc. keep their own label.
   if (isDelayed(f) && ["scheduled", "expected", "check-in"].includes(f.status)) return { label: "Delayed", cls: "delayed" };
@@ -185,6 +189,35 @@ export function liveFields(ac) {
   const vr = ac.verticalRateFpm;
   const vert = ac.onGround ? "—" : vr === null || vr === undefined ? NA : Math.abs(vr) < 300 ? "Level" : `${vr > 0 ? "Climbing" : "Descending"} ${Math.abs(Math.round(vr / 50) * 50).toLocaleString("en-US")} ft/min`;
   return [["ALTITUDE", alt], ["GROUND SPEED", spd], ["VERTICAL", vert]];
+}
+
+// Live data older than this no longer says where the aircraft is now.
+export const LIVE_FRESH_MS = 15 * 60 * 1000;
+const NEAR_AIRPORT_KM = 15, APPROACH_KM = 120;
+
+// What live ADS-B data says about this flight, or null when it can't say:
+// the identified aircraft on the ground at the destination (after departure
+// time) -> landed; on the ground at the origin -> not left yet; in the air ->
+// in the air, or approaching when close to the destination and coming down.
+// from/to: airports with lat/lon. Times are what the provider scheduled.
+export function liveStatus(f, ac, from, to, now = Date.now()) {
+  const seen = Date.parse(ac?.seenAt);
+  if (!ac || !Number.isFinite(ac.lat) || !Number.isFinite(ac.lon) || !(now - seen < LIVE_FRESH_MS)) return null;
+  const pos = { lat: ac.lat, lon: ac.lon };
+  const toKm = haversineKm(pos, to), fromKm = haversineKm(pos, from);
+  const t = m => Date.parse((m.runway || m.revised || m.scheduled)?.utc);
+  const depAt = t(f.departure), arrAt = t(f.arrival);
+  const base = { at: ac.seenAt, live: true };
+  if (ac.onGround) {
+    if (toKm !== null && toKm <= NEAR_AIRPORT_KM && now > depAt) return { ...base, label: "Landed (live data)", cls: "landed", key: "landed" };
+    if (fromKm !== null && fromKm <= NEAR_AIRPORT_KM && !(now > arrAt)) return { ...base, label: `On the ground at ${from.iata} (live data)`, cls: "boarding", key: "ground" };
+    return null; // on the ground somewhere else: don't guess
+  }
+  const descending = Number.isFinite(ac.verticalRateFpm) && ac.verticalRateFpm <= -300;
+  if (toKm !== null && toKm <= APPROACH_KM && (descending || (Number.isFinite(ac.altitudeFt) && ac.altitudeFt < 10000))) {
+    return { ...base, label: `Approaching ${to.iata} (live data)`, cls: "landed", key: "approaching" };
+  }
+  return { ...base, label: "In the air (live data)", cls: "landed", key: "air" };
 }
 
 // Turboprops such as older ATR 72s often don't broadcast an ADS-B position,
