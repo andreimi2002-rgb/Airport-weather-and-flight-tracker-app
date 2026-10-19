@@ -534,7 +534,11 @@ function renderFlightDrawer() {
 
   let trackNote = "";
   if (prog.state === "air") trackNote = `<span>Departed ${relative(dep.runway || dep.revised || dep.scheduled)}</span><span>Lands ${relative(arr.runway || arr.revised || arr.scheduled)}</span>`;
-  else if (prog.state === "before") trackNote = `<span>Departs ${relative(dep.revised || dep.scheduled)}</span><span></span>`;
+  else if (prog.state === "before") {
+    // Not reported as departed: a time in the past is "due", not "departed".
+    const t = dep.revised || dep.scheduled, due = Date.parse(t?.utc) < now;
+    trackNote = `<span>${due ? `Departure was due ${relative(t)} · not reported yet` : `Departs ${relative(t)}`}</span><span></span>`;
+  }
   else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? "Landed" : "Due"} ${relative(arr.runway || arr.revised || arr.scheduled)}</span><span></span>`;
   const pct = prog.pct ?? 0;
   const track = prog.state

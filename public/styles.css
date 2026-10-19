@@ -289,11 +289,13 @@ kbd,.kbd-btn{font-family:var(--mono);font-size:11px;border:1px solid var(--line2
 .drawer-backdrop.open .drawer{transform:none}
 .drawer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:#0d151ee6}
 .drawer-body{overflow:auto;padding:22px 24px 40px;flex:1;overscroll-behavior:contain}
-.fd-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.fd-head{display:flex;align-items:center;gap:14px}
+.fd-head>div{min-width:0}
+.fd-head .sub{white-space:normal}
 .fd-head .al{width:44px;height:44px;border-radius:13px;font-size:13px}
 .fd-head h2{margin:0;font:800 30px/1 var(--mono);letter-spacing:-.04em}
 .fd-head .sub{font-size:13px;margin-top:6px}
-.fd-head .status{margin-left:auto;font-size:12px;padding:7px 11px}
+.fd-head .status{margin-left:auto;font-size:12px;padding:7px 11px;flex:none}
 .route{margin-top:22px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(150deg,#132030,#0e1721);padding:20px}
 .route-ends{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start}
 .route-end .rc{font:800 40px/1 var(--mono);letter-spacing:-.05em}
