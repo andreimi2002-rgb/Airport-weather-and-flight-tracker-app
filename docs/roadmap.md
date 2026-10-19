@@ -17,8 +17,9 @@ Agreed with the owner on 2026-10-19. Work in this order, one branch and one prev
    - Cache each aircraft for 7 days (the Basic plan's limit).
    - Anything not supplied shows "Not available".
    - Optional: a "Check this flight" button for the current status (2 units per press).
-2. **Missing photos rule**: when two Wikidata items share an airport's IATA and ICAO codes (civil airport plus an air base or a closed airport: Austin, Aalborg, Bergen, Timișoara), drop items that are dissolved or military air bases, and match only if exactly one is left.
-3. **Weather panel**: clickable, with a detailed view (decoded TAF, more forecast hours, more fields).
+2. **Aircraft type photos** (owner chose option 1, 2026-10-19), branch `feature/aircraft-type-photos`: many flights (e.g. at OTP) have no registration, so no photo of the actual aircraft. Prepare one representative photo per common aircraft type (about 100–150 types) from Wikidata + Wikimedia Commons with a build script, same licence/credit/link rules as airport photos. Label it "Representative photo · <type> · not this aircraft". A photo of the actual aircraft, when found, always wins. No AeroDataBox units used.
+3. **Missing photos rule**: when two Wikidata items share an airport's IATA and ICAO codes (civil airport plus an air base or a closed airport: Austin, Aalborg, Bergen, Timișoara), drop items that are dissolved or military air bases, and match only if exactly one is left.
+4. **Weather panel**: clickable, with a detailed view (decoded TAF, more forecast hours, more fields).
 
 ## Then, toward FlightAware (stages A–E)
 | Stage | What | Needs |
