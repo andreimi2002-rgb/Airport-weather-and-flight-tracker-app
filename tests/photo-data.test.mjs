@@ -93,3 +93,39 @@ test("all photos are kept, preferred rank first (Schiphol/Amsterdam case)", () =
   assert.equal(rankOrder(R + "PreferredRank"), 0);
   assert.equal(rankOrder(undefined), 1, "rows without rank (old format) count as normal");
 });
+
+test("same IATA+ICAO on two items: the open civil airport wins over an air base or a closed airport", () => {
+  const W = "http://www.wikidata.org/entity/", F = "http://commons.wikimedia.org/wiki/Special:FilePath/";
+  const byIata = groupAirportItems([
+    { a: W + "Q478620", iata: "AAL", icao: "EKYT", img: F + "Aalborg.jpg", closed: "false", base: "false" },
+    { a: W + "Q2886531", iata: "AAL", icao: "EKYT", img: F + "Jet.jpg", closed: "false", base: "true" },
+    { a: W + "Q1430913", iata: "AUS", icao: "KAUS", img: F + "AUS.jpg", closed: "false", base: "false" },
+    { a: W + "Q7347861", iata: "AUS", icao: "KAUS", img: F + "Mueller.jpg", closed: "true", base: "false" },
+    { a: W + "Q1", iata: "XXX", icao: "XXXX", closed: "false", base: "false" },
+    { a: W + "Q2", iata: "XXX", icao: "XXXX", closed: "false", base: "false" },
+  ]);
+  assert.equal(matchAirport({ iata: "AAL", icao: "EKYT" }, byIata).qid, "Q478620");
+  assert.equal(matchAirport({ iata: "AUS", icao: "KAUS" }, byIata).qid, "Q1430913");
+  assert.equal(matchAirport({ iata: "XXX", icao: "XXXX" }, byIata), null, "two open civil items: still no guess");
+});
+
+test("several served cities: a clearly dominant one is chosen; the Wikivoyage banner is the last photo", () => {
+  const W = "http://www.wikidata.org/entity/", F = "http://commons.wikimedia.org/wiki/Special:FilePath/";
+  const cities = groupCities([
+    { a: W + "Q1", city: W + "Q239", cityLabel: "Brussels", cimg: F + "Brussels.jpg" },
+    { a: W + "Q1", city: W + "Q2", cityLabel: "Zaventem" },
+    { a: W + "Q9", city: W + "Q16557", cityLabel: "Dallas" },
+    { a: W + "Q9", city: W + "Q16558", cityLabel: "Fort Worth" },
+    { a: W + "Q5", city: W + "Q10686", cityLabel: "Belfast", cimg: F + "Small.jpg" },
+  ], [
+    { city: W + "Q239", pop: "1222637", cbanner: F + "Brussels%20banner.jpg" },
+    { city: W + "Q2", pop: "33000" },
+    { city: W + "Q16557", pop: "1304379" },
+    { city: W + "Q16558", pop: "956709" },
+    { city: W + "Q10686", pop: "345000", cbanner: F + "Belfast%20Wikivoyage%20Banner.png" },
+  ]);
+  assert.deepEqual(matchCity({ city: "Steenokkerzeel" }, "Q1", cities), { qid: "Q239", name: "Brussels", images: ["Brussels.jpg", "Brussels banner.jpg"] });
+  assert.equal(matchCity({ city: "Grapevine" }, "Q9", cities), null, "Dallas is not 3x Fort Worth: no guess");
+  assert.equal(matchCity({ city: "Dallas" }, "Q9", cities).name, "Dallas", "a name match still wins");
+  assert.deepEqual(matchCity({ city: "Belfast" }, "Q5", cities).images, ["Small.jpg", "Belfast Wikivoyage Banner.png"]);
+});

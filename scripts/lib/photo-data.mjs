@@ -36,9 +36,12 @@ export function groupAirportItems(rows) {
     const id = qid(r.a);
     if (!byIata.has(iata)) byIata.set(iata, new Map());
     const items = byIata.get(iata);
-    if (!items.has(id)) items.set(id, { qid: id, icao: new Set(), images: new Map() });
+    if (!items.has(id)) items.set(id, { qid: id, icao: new Set(), images: new Map(), closed: false, base: false });
     const item = items.get(id);
     if (r.icao) item.icao.add(String(r.icao).trim().toUpperCase());
+    // Closed (dissolved / closure date / end time) or a military air base: see matchAirport.
+    if (String(r.closed) === "true") item.closed = true;
+    if (String(r.base) === "true") item.base = true;
     addImage(item.images, fileNameFromFilePath(r.img), r.rank);
   }
   return byIata;
@@ -51,27 +54,49 @@ export function matchAirport(airport, byIata) {
   const items = [...(byIata.get(airport.iata)?.values() ?? [])];
   let candidates = items.filter(it => !airport.icao || it.icao.size === 0 || it.icao.has(airport.icao));
   if (candidates.length > 1 && airport.icao) candidates = candidates.filter(it => it.icao.has(airport.icao));
+  // Still several (civil airport + air base on the same field, or an old closed airport
+  // that kept the code): keep the open, non-military one if exactly one is left.
+  if (candidates.length > 1) {
+    const active = candidates.filter(it => !it.closed && !it.base);
+    if (active.length === 1) candidates = active;
+  }
   if (candidates.length !== 1) return null;
   const it = candidates[0];
   return { qid: it.qid, images: orderedImages(it.images) };
 }
 
 // Groups city rows (a, city, cityLabel, cimg, crank) by airport item.
-export function groupCities(rows) {
+// facts: rows (city, pop, cbanner) with each city's population and Wikivoyage
+// page banner (P948), used to choose between cities and as a last photo.
+export function groupCities(rows, facts = []) {
+  const extra = new Map();
+  for (const f of facts) {
+    const c = qid(f.city), e = extra.get(c) || { pop: null, banner: null };
+    const pop = Number(f.pop);
+    if (Number.isFinite(pop) && pop > (e.pop ?? -1)) e.pop = pop;
+    e.banner ??= fileNameFromFilePath(f.cbanner);
+    extra.set(c, e);
+  }
   const byAirport = new Map();
   for (const r of rows) {
     const a = qid(r.a), c = qid(r.city);
     if (!byAirport.has(a)) byAirport.set(a, new Map());
     const cities = byAirport.get(a);
-    if (!cities.has(c)) cities.set(c, { qid: c, name: r.cityLabel || null, images: new Map() });
+    if (!cities.has(c)) cities.set(c, { qid: c, name: r.cityLabel || null, images: new Map(), pop: extra.get(c)?.pop ?? null, banner: extra.get(c)?.banner ?? null });
     addImage(cities.get(c).images, fileNameFromFilePath(r.cimg), r.crank);
   }
   return byAirport;
 }
 
-// The city an airport serves: the only one listed, or the one whose name
-// matches the airport's municipality. Several unrelated cities -> none.
+// A city at least this many times bigger than the next one is "the" city
+// (Brussels for Brussels-Zaventem); otherwise none (Dallas / Fort Worth).
+export const DOMINANT_CITY_FACTOR = 3;
+
+// The city an airport serves: the only one listed, the one whose name
+// matches the airport's municipality, or a clearly dominant one by
+// population. Several comparable cities -> none.
 // A label that is just the Q-id (no English name) is not usable.
+// Photos: the city's own photos first, its Wikivoyage banner last.
 export function matchCity(airport, airportQid, citiesByAirport) {
   const cities = [...(citiesByAirport.get(airportQid)?.values() ?? [])].filter(c => c.name && !/^Q\d+$/.test(c.name));
   let city = null;
@@ -79,8 +104,15 @@ export function matchCity(airport, airportQid, citiesByAirport) {
   else if (cities.length > 1) {
     const same = cities.filter(c => norm(c.name) === norm(airport.city));
     if (same.length === 1) city = same[0];
+    else {
+      const byPop = [...cities].sort((x, y) => (y.pop ?? -1) - (x.pop ?? -1));
+      if (byPop[0].pop && (byPop[1].pop ?? 0) * DOMINANT_CITY_FACTOR <= byPop[0].pop) city = byPop[0];
+    }
   }
-  return city ? { qid: city.qid, name: city.name, images: orderedImages(city.images) } : null;
+  if (!city) return null;
+  const images = orderedImages(city.images);
+  if (city.banner && !images.includes(city.banner)) images.push(city.banner);
+  return { qid: city.qid, name: city.name, images };
 }
 
 // Only free licences that allow showing the photo with credit.
