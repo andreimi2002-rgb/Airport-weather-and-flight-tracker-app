@@ -1,7 +1,8 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, callsignFor, typeMatches, liveLine } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, callsignFor, typeConflicts, liveLine } from "./flights.js";
+import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, tafGroups, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
@@ -540,7 +541,8 @@ function renderFlightDrawer() {
     const t = dep.revised || dep.scheduled, due = Date.parse(t?.utc) < now;
     trackNote = `<span>${due ? `Departure was due ${relative(t)} · not reported yet` : `Departs ${relative(t)}`}</span><span></span>`;
   }
-  else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? "Landed" : "Due"} ${relative(arr.runway || arr.revised || arr.scheduled)}</span><span></span>`;
+  // Only "Landed" when the provider reports it; otherwise the arrival was due, not confirmed.
+  else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? `Landed ${relative(arr.runway || arr.revised || arr.scheduled)}` : `Arrival was due ${relative(arr.runway || arr.revised || arr.scheduled)} · landing not reported yet`}</span><span></span>`;
   const pct = prog.pct ?? 0;
   const track = prog.state
     ? `<div class="track" title="${prog.state === "air" ? "Estimated from the departure and arrival times, not a live position" : ""}"><div class="done" style="width:${pct}%"></div><div class="pt on" style="left:0"></div><div class="pt ${pct >= 100 ? "on" : ""}" style="left:100%"></div>${prog.state === "air" ? `<div class="plane" style="left:${pct}%">✈</div>` : ""}</div><div class="track-note">${trackNote}</div>`
@@ -618,24 +620,45 @@ const AIRBORNE = ["departed", "en-route", "approaching"];
 // (Planespotters.net) and the details (AeroDataBox, 1 unit).
 async function lookupAircraft(f) {
   if (f.demo) { fd.aircraftNote = "Demo flight: no aircraft lookup."; renderFlightDrawer(); return; }
-  let reg = f.aircraft.registration, regFrom = reg ? "board" : null;
+  let reg = f.aircraft.registration, regFrom = reg ? "board" : null, why = "";
   const cand = callsignFor(f);
-  if (!reg && cand) {
+  if (!reg) {
     fd.aircraftNote = "Looking for this flight in live ADS-B data…";
     renderFlightDrawer();
-    try {
-      const body = await fetchLive(cand.callsign);
-      if (fd?.flight !== f) return;
-      const ac = body.aircraft;
-      // A guessed callsign only counts when the aircraft type matches the board.
-      if (ac?.registration && (cand.fromProvider || typeMatches(ac.typeCode, f.aircraft.model))) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
-    } catch { /* live data is a bonus; carry on without it */ }
+    // 1. The provider's own callsign: the aircraft flying it now.
+    if (cand?.fromProvider) {
+      try {
+        const body = await fetchLive(cand.callsign);
+        if (fd?.flight !== f) return;
+        if (body.aircraft?.registration && !typeConflicts(body.aircraft.typeCode, f.aircraft.model)) { reg = body.aircraft.registration; regFrom = "adsb"; fd.live = body.aircraft; }
+      } catch { /* try the route match */ }
+    }
+    // 2. Airlines mostly fly under callsigns like "WMT1LH", not the flight number:
+    //    find the one aircraft of this airline flying exactly this route near where the flight should be.
+    const from = lookup(f.departure.airport.iata), to = lookup(f.arrival.airport.iata), icao = f.airline?.icao;
+    if (!reg && icao && from && to) {
+      try {
+        const body = await fetchIdentify(icao, from.iata, to.iata, estimatedPosition(f, from, to));
+        if (fd?.flight !== f) return;
+        const ac = body.aircraft;
+        if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
+        else if (body.status !== "ok") why = body.notice || "";
+        else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
+      } catch { /* shown below as not found */ }
+    }
     if (fd?.flight !== f) return;
-  } else if (reg && cand?.fromProvider && AIRBORNE.includes(f.status)) {
-    // Known aircraft in the air: show its live altitude and speed (no lookup needed for the photo).
+  } else if (cand?.fromProvider && AIRBORNE.includes(f.status)) {
+    // Known aircraft in the air: show its live altitude and speed.
     fetchLive(cand.callsign).then(body => { if (fd?.flight === f && body.aircraft?.registration === reg) { fd.live = body.aircraft; renderFlightDrawer(); } }).catch(() => {});
   }
-  if (!reg) { fd.aircraftNote = "Aircraft not assigned yet: no registration from the provider or live ADS-B data"; renderFlightDrawer(); return; }
+  if (!reg) {
+    const dep = Date.parse((f.departure.revised || f.departure.scheduled)?.utc);
+    const early = !AIRBORNE.includes(f.status) && f.status !== "arrived" && Number.isFinite(dep) && dep - Date.now() > 30 * 60000;
+    fd.aircraftNote = early ? "Aircraft not known yet: it usually shows up in live data shortly before departure"
+      : "Aircraft not found in live ADS-B data" + (why ? " (" + why + ")" : ": it may not be transmitting, or its route isn't in the open route database");
+    renderFlightDrawer();
+    return;
+  }
 
   fd.reg = reg;
   fd.aircraftNote = "Looking up " + reg + "…";

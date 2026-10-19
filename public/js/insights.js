@@ -140,3 +140,27 @@ export function milestones(f, now = Date.now()) {
 }
 
 export { isDone };
+
+// Point a fraction of the way along the great circle from a to b ({ lat, lon } in degrees).
+export function greatCirclePoint(a, b, frac) {
+  const rad = x => (x * Math.PI) / 180, deg = x => (x * 180) / Math.PI;
+  const [p1, l1, p2, l2] = [rad(a.lat), rad(a.lon), rad(b.lat), rad(b.lon)];
+  const d = 2 * Math.asin(Math.sqrt(Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin((l2 - l1) / 2) ** 2));
+  if (d === 0) return { lat: a.lat, lon: a.lon };
+  const A = Math.sin((1 - frac) * d) / Math.sin(d), B = Math.sin(frac * d) / Math.sin(d);
+  const x = A * Math.cos(p1) * Math.cos(l1) + B * Math.cos(p2) * Math.cos(l2);
+  const y = A * Math.cos(p1) * Math.sin(l1) + B * Math.cos(p2) * Math.sin(l2);
+  const z = A * Math.sin(p1) + B * Math.sin(p2);
+  return { lat: deg(Math.atan2(z, Math.sqrt(x * x + y * y))), lon: deg(Math.atan2(y, x)) };
+}
+
+// Where the flight should be now, from its own times only: the origin before
+// departure, the destination after arrival, otherwise along the route.
+export function estimatedPosition(f, from, to, now = Date.now()) {
+  if (!from || !to) return null;
+  const leftAt = T(f.departure.runway) || T(f.departure.revised) || T(f.departure.scheduled);
+  const landAt = T(f.arrival.runway) || T(f.arrival.revised) || T(f.arrival.scheduled);
+  if (!Number.isFinite(leftAt) || !Number.isFinite(landAt) || landAt <= leftAt) return { lat: from.lat, lon: from.lon };
+  const frac = Math.max(0, Math.min(1, (now - leftAt) / (landAt - leftAt)));
+  return greatCirclePoint(from, to, frac);
+}

@@ -101,9 +101,50 @@ test("live line", () => {
 });
 
 test("function: routes and input checks", async () => {
-  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/live/:callsign"]);
+  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/live/:callsign", "/api/identify/:airline/:from/:to/:lat/:lon"]);
   let res = await handler(new Request("http://x/api/aircraft-photo/bad%20reg"), { params: { reg: "bad reg" } });
   assert.equal(res.status, 400);
   res = await handler(new Request("http://x/api/live/x"), { params: { callsign: "x" } });
   assert.equal(res.status, 400);
+});
+
+test("route match: one aircraft of this airline on exactly this route; unknown routes are not errors", async () => {
+  const { identifyFlight, normalizeRoute } = await import("../netlify/lib/flights/live.mjs");
+  assert.deepEqual(normalizeRoute({ _airport_codes_iata: "OTP-VLC", airline_code: "WMT", plausible: true }), { from: "OTP", to: "VLC", airline: "WMT", plausible: true });
+  assert.equal(normalizeRoute({ _airport_codes_iata: "OTP-VIE-CDG" }), null, "multi-leg routes are not used");
+  const near = { ac: [
+    { flight: "WMT1LH  ", r: "HA-LXP", t: "A321", alt_baro: 18500, gs: 300, lat: 44.9, lon: 25.5 },
+    { flight: "WMT5CS  ", r: "9H-WDG", t: "A21N", alt_baro: 3650, gs: 200, lat: 44.6, lon: 26.2 },
+    { flight: "WMT7003 ", r: "HA-LYA", t: "A21N", alt_baro: 35000, gs: 450, lat: 47.2, lon: 21.8 },
+    { flight: "ROT276H ", r: "YR-ATL", t: "AT76", alt_baro: 8275, gs: 250, lat: 44.4, lon: 26.0 },
+  ] };
+  const routes = { WMT1LH: { _airport_codes_iata: "OTP-VLC", plausible: true }, WMT5CS: { _airport_codes_iata: "MXP-OTP", plausible: true } };
+  const f = async url => {
+    if (url.includes("/v2/point/")) return ok(near);
+    const cs = /route\/([A-Z0-9]+)\//.exec(url)[1];
+    return routes[cs] ? ok(routes[cs]) : new Response("Internal Server Error", { status: 500 });
+  };
+  let r = await identifyFlight({ airline: "WMT", from: "OTP", to: "VLC", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.status, "ok");
+  assert.equal(r.body.aircraft.registration, "HA-LXP");
+  assert.equal(r.body.candidates, 3, "only this airline's aircraft are checked");
+  r = await identifyFlight({ airline: "WMT", from: "OTP", to: "BCN", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft, null, "no aircraft on this route");
+  // Two aircraft claiming the same route: none is trusted.
+  routes.WMT7003 = { _airport_codes_iata: "OTP-VLC", plausible: true };
+  r = await identifyFlight({ airline: "WMT", from: "OTP", to: "VLC", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft, null);
+  assert.equal(r.body.matches, 2);
+});
+
+test("estimated position follows the route by the flight's own times", async () => {
+  const { estimatedPosition, greatCirclePoint } = await import("../public/js/insights.js");
+  const OTPc = { lat: 44.57, lon: 26.08 }, VLCc = { lat: 39.49, lon: -0.48 };
+  const fl = { departure: { scheduled: { utc: "2026-10-19T15:00Z" } }, arrival: { scheduled: { utc: "2026-10-19T19:00Z" } } };
+  const start = estimatedPosition(fl, OTPc, VLCc, Date.parse("2026-10-19T14:00Z"));
+  assert.ok(Math.abs(start.lat - 44.57) < 1e-6 && Math.abs(start.lon - 26.08) < 1e-6, "before departure: at the origin");
+  const end = estimatedPosition(fl, OTPc, VLCc, Date.parse("2026-10-19T20:00Z"));
+  assert.ok(Math.abs(end.lat - 39.49) < 1e-6 && Math.abs(end.lon + 0.48) < 1e-6, "after arrival: at the destination");
+  const mid = greatCirclePoint(OTPc, VLCc, 0.5);
+  assert.ok(mid.lat > 39.49 && mid.lat < 46 && mid.lon > -0.48 && mid.lon < 26.08, JSON.stringify(mid));
 });

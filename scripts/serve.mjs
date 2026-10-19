@@ -18,6 +18,7 @@ createServer(async (req, res) => {
     [/^\/api\/aircraft\/([^/]+)$/, m => ["flight-details", { reg: m[1] }]],
     [/^\/api\/aircraft-photo\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
     [/^\/api\/live\/([^/]+)$/, m => ["aircraft-live", { callsign: m[1] }]],
+    [/^\/api\/identify\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["aircraft-live", { airline: m[1], from: m[2], to: m[3], lat: m[4], lon: m[5] }]],
     [/^\/api\/flight-status\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2], code: m[3] }]],
   ];
   const hit = routes.map(([re, to]) => { const m = re.exec(path); return m && to(m); }).find(Boolean);

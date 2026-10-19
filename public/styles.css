@@ -323,8 +323,9 @@ kbd,.kbd-btn{font-family:var(--mono);font-size:11px;border:1px solid var(--line2
 .fd-sec{margin-top:24px}
 .fd-sec>h3{font-size:13px;margin:0 0 12px;letter-spacing:-.01em;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .fd-sec>h3 small{font-size:11px;color:var(--muted);font-weight:500}
-.ac{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
-.plane-photo{position:relative;min-height:190px;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 70% 20%,#203246,#121b26)}
+.ac{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;align-items:start}
+/* 16:9 like the Planespotters photos, so the whole aircraft is visible (not stretched to the field column). */
+.plane-photo{position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 70% 20%,#203246,#121b26)}
 .plane-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .plane-photo.no-photo img{display:none}
 .plane-photo.no-photo:before{content:"✈";position:absolute;inset:0;display:grid;place-items:center;font-size:64px;color:#2a3a4c}

@@ -150,3 +150,14 @@ export function liveLine(ac) {
   const alt = ac.altitudeFt === null ? null : ac.altitudeFt >= 18000 ? "FL" + String(Math.round(ac.altitudeFt / 100)).padStart(3, "0") : ac.altitudeFt.toLocaleString("en-US") + " ft";
   return [alt, ac.groundSpeedKt !== null ? ac.groundSpeedKt + " kt" : null].filter(Boolean).join(" · ") || "Airborne";
 }
+
+// The aircraft of this airline flying exactly this route near pos (adsb.lol).
+export const fetchIdentify = (airlineIcao, from, to, pos) =>
+  getJSON(`/api/identify/${encodeURIComponent(airlineIcao)}/${from}/${to}/${pos.lat.toFixed(2)}/${pos.lon.toFixed(2)}`);
+
+// True when both sides name a type family and they differ (e.g. "A320" vs "Boeing 737-800").
+export function typeConflicts(typeCode, boardModel) {
+  const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
+  const n = /(\d+)/.exec(String(boardModel || ""));
+  return !!fam && !!n && Number(n[1]) !== fam;
+}
