@@ -43,6 +43,19 @@ export const isCancelled = f => f.status === "cancelled" || f.status === "maybe-
 // Finished at this airport: a departure has left, an arrival has landed.
 export const isDone = f => (f.direction === "departure" ? ["departed", "en-route", "approaching", "arrived"] : ["arrived"]).includes(f.status);
 
+// Overdue: its expected (or scheduled) time at this airport passed more than
+// OVERDUE_MIN ago, yet the provider has not reported it departed/landed or
+// cancelled. Many airports have no live feed, so the status never changes;
+// we then say "No recent update" rather than keep showing "Expected".
+export const OVERDUE_MIN = 15;
+const FINAL = ["cancelled", "maybe-cancelled", "diverted"];
+export function isOverdue(f, now = Date.now()) {
+  if (isDone(f) || FINAL.includes(f.status)) return false;
+  const m = f.direction === "departure" ? f.departure : f.arrival;
+  const t = Date.parse((m.revised || m.scheduled)?.utc);
+  return Number.isFinite(t) && now - t > OVERDUE_MIN * 60000;
+}
+
 export function boardStats(flights) {
   const dep = flights.filter(f => f.direction === "departure");
   const arr = flights.filter(f => f.direction === "arrival");

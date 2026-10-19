@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { boardStats, DELAY_THRESHOLD_MIN } from "./flight-model.js";
-import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
+import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
 
@@ -271,12 +271,19 @@ function renderOverview() {
   } else {
     const b = body.board;
     $("overviewNote").textContent = `Passenger flights from ${airportClock(b.from)} to ${airportClock(b.to)} airport time.` + (b.live ? "" : " Schedule only: no live updates for this airport.");
-    $("updatedAt").textContent = `UPDATED ${airportClock(b.fetchedAt)}` + (body.stale ? " · OLD DATA" : "");
+    updateFlightAge();
   }
   const sorted = [...flights].sort((x, y) => hhmmKey(x).localeCompare(hhmmKey(y)));
   const d = nextFlight(sorted, "departure"), r = nextFlight(sorted, "arrival");
   const none = kind === "demo" ? "None in demo list" : "None in this window";
   setText({ nextDeparture: d ? `${d.number} · ${placeName(other(d).airport)}` : none, nextDepartureTime: d ? hhmm(here(d).scheduled) : "", nextArrival: r ? `${r.number} · ${placeName(other(r).airport)}` : none, nextArrivalTime: r ? hhmm(here(r).scheduled) : "" });
+}
+
+// "UPDATED 15:04 · 18 MIN AGO": when the board was fetched, kept current every minute.
+function updateFlightAge() {
+  const { kind, body } = flightState;
+  if (kind !== "live") return;
+  $("updatedAt").textContent = `UPDATED ${airportClock(body.board.fetchedAt)} · ${ago(body.board.fetchedAt).toUpperCase()}` + (body.stale ? " · OLD DATA" : "");
 }
 
 const hhmmKey = f => here(f).scheduled?.utc || here(f).scheduled?.local || "";
@@ -487,6 +494,12 @@ $("flightSearch").addEventListener("input", renderFlights);
 $("statusFilter").addEventListener("change", renderFlights);
 $("refreshBtn").onclick = () => { if (current) { showAirport(current); showToast("Refreshed"); } };
 setInterval(() => { if (current && document.visibilityState === "visible") loadFlights(current, true); }, FLIGHTS_REFRESH_MS);
+// Every minute: refresh the age label and statuses that became overdue (no new request).
+setInterval(() => {
+  if (!current || flightState.kind !== "live" || document.visibilityState !== "visible") return;
+  updateFlightAge();
+  if (!$("flightModal").classList.contains("open")) { renderOverview(); renderFlights(); }
+}, 60000);
 window.addEventListener("popstate", route);
 setInterval(updateClock, 10000);
 setInterval(() => { if (current && document.visibilityState === "visible") renderWeather(current, true); }, REFRESH_MS);

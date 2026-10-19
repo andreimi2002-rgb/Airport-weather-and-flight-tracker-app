@@ -1,6 +1,16 @@
 // Flights on the page: fetches /api/flights/<IATA> (a Netlify Function that
 // asks AeroDataBox) and turns normalized flights into what the board shows.
-import { STATUS_LABEL, isDelayed, isDone } from "./flight-model.js";
+import { STATUS_LABEL, isDelayed, isDone, isOverdue } from "./flight-model.js";
+
+// "just now", "18 min ago", "1 h 5 min ago"
+export function ago(iso, now = Date.now()) {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const min = Math.max(0, Math.round((now - t) / 60000));
+  if (min < 1) return "just now";
+  if (min < 60) return min + " min ago";
+  return Math.floor(min / 60) + " h" + (min % 60 ? " " + (min % 60) + " min" : "") + " ago";
+}
 
 export const REFRESH_MS = 15 * 60 * 1000;
 
@@ -28,7 +38,8 @@ export const here = f => (f.direction === "departure" ? f.departure : f.arrival)
 export const other = f => (f.direction === "departure" ? f.arrival : f.departure);
 
 // Label and colour class for the status pill.
-export function statusView(f) {
+export function statusView(f, now = Date.now()) {
+  if (isOverdue(f, now)) return { label: "No recent update", cls: "landed" };
   if (isDelayed(f) && !isDone(f) && f.status !== "delayed") return { label: "Delayed", cls: "delayed" };
   const cls = {
     delayed: "delayed", "maybe-cancelled": "delayed",

@@ -200,11 +200,12 @@ test("page helpers: status pill, update time, duration", async () => {
   const { statusView, updateTime, fmtDuration, hhmm, nextFlight } = await import("../public/js/flights.js");
   const b = normalizeBoard(SAMPLE);
   const [unknown, delayed, cancelled] = b.departures;
-  assert.deepEqual(statusView(delayed), { label: "Delayed", cls: "delayed" });
-  assert.deepEqual(statusView(cancelled), { label: "Cancelled", cls: "cancelled" });
-  assert.deepEqual(statusView(unknown), { label: "Scheduled", cls: "" });
-  assert.deepEqual(statusView({ ...unknown, status: "expected", delayMinutes: 30 }), { label: "Delayed", cls: "delayed" });
-  assert.deepEqual(statusView(b.arrivals[0]), { label: "Arrived", cls: "landed" });
+  const T0 = Date.parse("2026-10-19T12:00:00Z"); // before every sample flight
+  assert.deepEqual(statusView(delayed, T0), { label: "Delayed", cls: "delayed" });
+  assert.deepEqual(statusView(cancelled, T0), { label: "Cancelled", cls: "cancelled" });
+  assert.deepEqual(statusView(unknown, T0), { label: "Scheduled", cls: "" });
+  assert.deepEqual(statusView({ ...unknown, status: "expected", delayMinutes: 30 }, T0), { label: "Delayed", cls: "delayed" });
+  assert.deepEqual(statusView(b.arrivals[0], T0), { label: "Arrived", cls: "landed" });
   assert.deepEqual(updateTime(delayed), { time: "16:55", note: "Estimated" });
   assert.deepEqual(updateTime(b.arrivals[0]), { time: "14:42", note: "Actual" });
   assert.deepEqual(updateTime(unknown), { time: "—", note: "No update" });
@@ -216,4 +217,24 @@ test("page helpers: status pill, update time, duration", async () => {
   assert.equal(nextFlight(b.departures, "departure", Date.parse("2026-10-19T12:00:00Z")).number, "TEST 7");
   assert.equal(nextFlight(b.departures, "departure", at1300).number, "TEST 391", "past schedule-only flight skipped");
   assert.equal(nextFlight(b.arrivals, "arrival", at1300), undefined);
+});
+
+test("overdue flights show 'No recent update' instead of a stale 'Expected'", async () => {
+  const { statusView, ago } = await import("../public/js/flights.js");
+  const { isOverdue } = await import("../public/js/flight-model.js");
+  const b = normalizeBoard(SAMPLE);
+  const delayed = b.departures.find(f => f.number === "TEST 391"); // revised 13:55Z
+  const cancelled = b.departures.find(f => f.number === "TEST 12"); // 14:00Z, cancelled
+  const arrived = b.arrivals[0];                                    // arrived 11:42Z
+  const at = iso => Date.parse(iso);
+  assert.equal(isOverdue(delayed, at("2026-10-19T14:05:00Z")), false, "10 min past: not yet");
+  assert.equal(isOverdue(delayed, at("2026-10-19T14:11:00Z")), true, "16 min past revised time");
+  assert.deepEqual(statusView(delayed, at("2026-10-19T14:11:00Z")), { label: "No recent update", cls: "landed" });
+  assert.equal(isOverdue(cancelled, at("2026-10-19T18:00:00Z")), false, "cancelled stays cancelled");
+  assert.equal(isOverdue(arrived, at("2026-10-19T18:00:00Z")), false, "finished flights keep their status");
+  const demo = { direction: "departure", status: "expected", departure: { scheduled: { utc: null, local: "2000-01-01T05:35" }, revised: null } };
+  assert.equal(isOverdue(demo, at("2026-10-19T18:00:00Z")), false, "demo flights have no real time");
+  assert.equal(ago("2026-10-19T12:00:00Z", at("2026-10-19T12:18:00Z")), "18 min ago");
+  assert.equal(ago("2026-10-19T12:00:00Z", at("2026-10-19T13:05:00Z")), "1 h 5 min ago");
+  assert.equal(ago("2026-10-19T12:00:00Z", at("2026-10-19T12:00:20Z")), "just now");
 });
