@@ -123,7 +123,9 @@ export function getLiveAircraft(callsign, { store, now = Date.now(), fetchImpl =
 export const NEAR_RADIUS_NM = 250;   // adsb.lol maximum
 export const NEAR_FRESH_MS = 2 * 60 * 1000;
 export const ROUTE_FRESH_MS = 6 * 3600 * 1000;
-const MAX_ROUTE_LOOKUPS = 6;
+const MAX_ROUTE_LOOKUPS = 4;
+const ADSB_GAP_MS = 300; // adsb.lol allows about 4 requests a second
+const sleep = ms => new Promise(res => setTimeout(res, ms));
 
 // Counts one adsb.lol call against the daily cap; throws when used up.
 async function spendAdsb(store, now, cap) {
@@ -138,7 +140,11 @@ async function cachedAdsb(store, key, freshMs, now, cap, load) {
   const saved = await store.get(key, { type: "json" });
   if (saved && now - Date.parse(saved.fetchedAt) < freshMs) return saved.value;
   await spendAdsb(store, now, cap);
-  const value = await load();
+  let value;
+  // Spaced out, and one retry after a "too many requests".
+  try { value = await load(); }
+  catch (err) { if (err.status !== 429) throw err; await sleep(1200); value = await load(); }
+  await sleep(ADSB_GAP_MS);
   await store.setJSON(key, { fetchedAt: new Date(now).toISOString(), value });
   return value;
 }
@@ -158,7 +164,11 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
       const j = await getJson(`https://api.adsb.lol/v2/point/${lat}/${lon}/${NEAR_RADIUS_NM}`, fetchImpl);
       return (Array.isArray(j?.ac) ? j.ac : []).filter(a => str(a.flight) && str(a.r)).map(a => ({ ...normalizeAdsb(a, now), lat: num(a.lat), lon: num(a.lon) }));
     });
-    const mine = near.filter(a => a.callsign.toUpperCase().startsWith(q.airline)).slice(0, MAX_ROUTE_LOOKUPS);
+    // This airline's aircraft, nearest to where the flight should be first.
+    const d2 = a => ((a.lat ?? lat) - q.lat) ** 2 + ((a.lon ?? lon) - q.lon) ** 2;
+    const airlineAll = near.filter(a => a.callsign.toUpperCase().startsWith(q.airline));
+    const mine = [...airlineAll].sort((x, y) => d2(x) - d2(y)).slice(0, MAX_ROUTE_LOOKUPS);
+    const seen = [];
     const matches = [];
     for (const a of mine) {
       // adsb.lol answers HTTP 500/404 when it doesn't know a callsign's route: that is "no route", not a failure.
@@ -166,10 +176,11 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
         try { return normalizeRoute(await getJson(`https://api.adsb.lol/api/0/route/${encodeURIComponent(a.callsign)}/${a.lat ?? lat}/${a.lon ?? lon}`, fetchImpl)); }
         catch (err) { if (err.status === 500 || err.status === 404) return null; throw err; }
       });
+      seen.push({ callsign: a.callsign, route: route ? route.from + "-" + route.to : null });
       if (route && route.plausible && route.from === q.from && route.to === q.to) matches.push({ ...a, route });
     }
     // Exactly one aircraft of this airline on exactly this route; anything else is not trusted.
-    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, candidates: mine.length, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };
+    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, nearby: near.length, airlineNearby: airlineAll.length, candidates: mine.length, checked: seen, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };
   } catch (err) {
     return { body: base(err.quota ? "quota" : "error", { aircraft: null, notice: err.quota ? err.message : "adsb.lol " + err.message }), cacheSeconds: 60 };
   }

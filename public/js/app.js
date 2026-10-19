@@ -636,15 +636,21 @@ async function lookupAircraft(f) {
     // 2. Airlines mostly fly under callsigns like "WMT1LH", not the flight number:
     //    find the one aircraft of this airline flying exactly this route near where the flight should be.
     const from = lookup(f.departure.airport.iata), to = lookup(f.arrival.airport.iata), icao = f.airline?.icao;
+    if (!reg && !icao) why = "the provider gave no airline ICAO code, so live data can't be matched";
+    else if (!reg && (!from || !to)) why = "one of the airports is not in our airport list";
     if (!reg && icao && from && to) {
       try {
         const body = await fetchIdentify(icao, from.iata, to.iata, estimatedPosition(f, from, to));
         if (fd?.flight !== f) return;
         const ac = body.aircraft;
+        // Says exactly which step found nothing, so a screenshot shows the cause.
         if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
-        else if (body.status !== "ok") why = body.notice || "";
+        else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, not a ${f.aircraft.model}`;
+        else if (body.status !== "ok") why = body.notice || "live data unavailable";
         else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
-      } catch { /* shown below as not found */ }
+        else if (!body.airlineNearby) why = `no ${icao} aircraft within 250 nm (${body.nearby ?? 0} aircraft seen)`;
+        else why = `checked ${(body.checked || []).map(c => `${c.callsign} ${c.route || "route unknown"}`).join(", ")}; none on ${from.iata}–${to.iata}`;
+      } catch (err) { why = "live lookup failed (" + err.message + ")"; }
     }
     if (fd?.flight !== f) return;
   } else if (cand?.fromProvider && AIRBORNE.includes(f.status)) {
@@ -655,7 +661,7 @@ async function lookupAircraft(f) {
     const dep = Date.parse((f.departure.revised || f.departure.scheduled)?.utc);
     const early = !AIRBORNE.includes(f.status) && f.status !== "arrived" && Number.isFinite(dep) && dep - Date.now() > 30 * 60000;
     fd.aircraftNote = early ? "Aircraft not known yet: it usually shows up in live data shortly before departure"
-      : "Aircraft not found in live ADS-B data" + (why ? " (" + why + ")" : ": it may not be transmitting, or its route isn't in the open route database");
+      : "Aircraft not found in live ADS-B data" + (why ? ": " + why : "");
     renderFlightDrawer();
     return;
   }
