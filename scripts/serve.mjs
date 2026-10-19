@@ -11,11 +11,12 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": 
 
 createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  // /api/weather/OTP runs the same code as the Netlify Function (no CDN cache here).
-  const api = /^\/api\/weather\/([^/]+)$/.exec(path);
+  // /api/weather/OTP and /api/flights/OTP run the same code as the Netlify
+  // Functions (no CDN cache here; flights keep their budget in memory).
+  const api = /^\/api\/(weather|flights)\/([^/]+)$/.exec(path);
   if (api) {
-    const { default: weather } = await import("../netlify/functions/weather.mjs");
-    const r = await weather(new Request("http://localhost" + req.url), { params: { code: api[1] } });
+    const { default: fn } = await import(`../netlify/functions/${api[1]}.mjs`);
+    const r = await fn(new Request("http://localhost" + req.url), { params: { code: api[2] } });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(Buffer.from(await r.arrayBuffer()));
     return;
   }

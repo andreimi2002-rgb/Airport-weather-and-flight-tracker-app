@@ -44,3 +44,9 @@ body{min-height:100vh}
 .weather-source{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.6}
 .weather-source a{color:inherit}
 @media(max-width:420px){.forecast-slot span{font-size:15px}.forecast-slot strong{font-size:12px}}
+.board-note-warn{color:var(--amber)}
+.section-note a{color:inherit}
+.plane-photo.no-photo img{display:none}
+.plane-photo.no-photo:before{content:"✈";position:absolute;inset:0;display:grid;place-items:center;font-size:64px;color:#2a3a4c}
+.photo-note a{color:inherit}
+.photo-note:empty{display:none}
