@@ -84,6 +84,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 | [Planespotters.net](https://www.planespotters.net/) photo API | Photo of the exact aircraft by registration | Photographer credited next to the photo and linked to the photo page (their API terms) |
 | [VRS standing data](https://github.com/vradarserver/standing-data) | Route of each airline callsign (e.g. WMT1LH = OTP–VLC) and airline IATA→ICAO codes; one file per airline, downloaded on demand and kept a day | CC0 |
 | [adsb.lol](https://adsb.lol/) | Live ADS-B: which aircraft flies a callsign now, altitude, speed | ODbL; free, no key today (they say a key will be required later) |
+| [Inter](https://github.com/rsms/inter) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | Fonts, served from `public/fonts/` (no Google Fonts requests) | SIL Open Font License 1.1 (`public/fonts/LICENSE-*.txt`) |
 | [Unsplash](https://unsplash.com) | One illustrative aircraft photo (demo flight detail) | Unsplash licence |
 
 ### Weather function
