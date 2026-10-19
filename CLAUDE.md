@@ -64,6 +64,9 @@ Owner's choices so far: OurAirports for airports; mwgg for time zones; airport s
 
 Known gaps to revisit later (owner asked, not now): some airports have no airport or city photo (e.g. Timișoara TSR); some chosen photos look odd (satellite views, collages); Heathrow's only photo is GFDL (excluded); Dallas/Fort Worth has two cities so none is shown; on phones the flight table still scrolls sideways (planned for item 6).
 
-Next: item 3, real weather (branch `feature/weather`).
+In review (not merged yet):
+- Item 3 (branch `feature/weather`): `/api/weather/<IATA>` Netlify Function (`netlify/functions/weather.mjs`, logic in `netlify/lib/weather.mjs`). METAR/TAF from aviationweather.gov (no key; HTTP 204 = no report), forecast from MET Norway (owner's choice over Open-Meteo: commercial use allowed, CC BY 4.0, needs identifying User-Agent). No METAR station -> say so and show forecast labelled as forecast, never borrow another station. CDN cache 5 min (1 min if a part failed), rate limit 60/min/IP. Demo weather removed.
 
-Tools available for testing: Node 24 and Chrome (headless) on this machine. No Python. The Bash tool cannot read some repo files (permission denied); use the Read tool for those.
+Next after item 3 is merged: item 4, flight provider comparison (branch `feature/flights`).
+
+Tools available for testing: Node 24, Chrome (headless) and netlify-cli 27 (installed globally, not a project dependency, to keep Netlify builds fast) on this machine. No Python (not needed). `npm run serve` also serves `/api/weather`. Headless Chrome `--window-size` cannot go below ~500 px wide: for phone screenshots use DevTools device emulation (Emulation.setDeviceMetricsOverride). Quirk: under `netlify dev`, a function 404 is retried as `<path>.html`, so unknown codes show 400 locally; production and `npm run serve` return 404. The Bash tool cannot read some repo files (permission denied); use the Read tool for those.

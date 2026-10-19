@@ -9,15 +9,16 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 - Saved airports (★), stored in this browser only. The app reopens the last airport you viewed.
 - Keyboard: arrows + Enter in the airport search, Escape closes windows.
 - Airport and city photos from Wikimedia Commons for about half of all airports (most large airports), each with author, licence and a link to the original. Airports without a freely licensed photo show a styled panel. A photo that fails to load also falls back to that panel.
+- Live weather for every airport: the latest METAR (decoded into wind, visibility, ceiling, conditions and a plain-English reading) and TAF from aviationweather.gov, and a forecast for the next hours from MET Norway. Airports without a reporting METAR station say so and show only the forecast, labelled as a forecast. The weather refreshes every 10 minutes while the page is open; if a refresh fails, the last data stays visible with a warning and its time. METARs older than 90 minutes are flagged.
 
 ## Still demo data (clearly labelled in the app)
-- Weather: sample values for SEA, LHR, OTP and JFK only. Other airports show "not connected yet".
 - Flights: sample board for SEA only. Other airports show "No flight data yet".
 - Aircraft photo in the flight detail: one illustrative Unsplash photo, labelled "not this aircraft".
 
 ## Run locally
 ```
-npm run serve     # http://localhost:8080 (no install needed, Node 20+)
+npm run serve     # http://localhost:8080 (no install needed, Node 20+), includes /api/weather
+netlify dev       # same site through the Netlify runtime (needs: npm install -g netlify-cli)
 npm test          # automated tests
 ```
 Opening `index.html` directly from disk does not work any more: the app loads its airport list and needs a web server.
@@ -38,11 +39,14 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `public/` — the site Netlify publishes (`index.html`, `styles.css`, `js/`, `data/airports.json`, `data/photos/`)
 - `public/js/airports.js` — airport search, lookup and URL handling
 - `public/js/photos.js` — loads photos and builds the credit line
-- `public/js/demo-data.js` — all demo values in one place
+- `public/js/weather.js` — loads weather from `/api/weather/<IATA>` and formats it
+- `public/js/demo-data.js` — all demo values in one place (flights only now)
 - `public/js/app.js` — page logic
+- `netlify/functions/weather.mjs` — the `/api/weather/<IATA>` function: input check, airport lookup, cache headers, rate limit
+- `netlify/lib/weather.mjs` — calls the weather providers and decodes their answers
 - `scripts/` — airport and photo data builders, local server
 - `tests/` — tests (`node --test`)
-- `netlify.toml` — publish folder and the `/airport/*` address rule
+- `netlify.toml` — publish folder, functions folder and the `/airport/*` address rule
 
 ## Data sources
 | Source | Used for | Licence |
@@ -51,9 +55,17 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 | [mwgg/Airports](https://github.com/mwgg/Airports) | Airport time zones | MIT, Copyright (c) 2014 mwgg |
 | [Wikidata](https://www.wikidata.org) | Which photo and which city belong to each airport | CC0 |
 | [Wikimedia Commons](https://commons.wikimedia.org) | Airport and city photos | Per photo, shown in the app: public domain, CC0, CC BY or CC BY-SA |
+| [NOAA Aviation Weather Center](https://aviationweather.gov/data/api/) | METAR and TAF | US government data, public domain |
+| [MET Norway](https://api.met.no/) | Forecast (Locationforecast 2.0) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), credited in the app |
 | [Unsplash](https://unsplash.com) | One illustrative aircraft photo (demo flight detail) | Unsplash licence |
+
+### Weather function
+`GET /api/weather/OTP` looks the airport up in `airports.json` (the browser never sends coordinates), then asks the three sources in parallel with an 8-second timeout. No API keys are needed. Requests identify the app with a User-Agent, as MET Norway's terms require.
+- Caching: Netlify's CDN keeps a complete answer for 5 minutes (`durable`, then up to 10 more minutes stale while refreshing). An answer with a failed part is kept 1 minute. Warm function instances also remember provider answers (METAR 5 min, TAF 15 min, forecast until MET Norway's `Expires`).
+- Rate limit: 60 requests per minute per visitor IP (`config.rateLimit`).
+- Each part reports `ok`, `none` (e.g. no station) or `error`; a field the provider does not report stays empty and shows "Not reported".
 
 Time zones are matched by ICAO/IATA code. When the two disagree or no match exists (mostly small airfields), the time zone is left empty rather than guessed.
 
 ## Deploy
-Netlify reads `netlify.toml`: publish directory `public`, no build command. In the Netlify UI the **Base directory** must be empty (the repository root).
+Netlify reads `netlify.toml`: publish directory `public`, no build command, functions from `netlify/functions` (bundled by esbuild). In the Netlify UI the **Base directory** must be empty (the repository root).
