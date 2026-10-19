@@ -325,3 +325,53 @@ async function routeOf(ac, { store, now, fetchImpl, airportByIcao }) {
   if (!atAirport && !onRoute(p, posA, posB).ok) return { route: null, routeNote: `${cs} usually flies ${route.from || fromIcao}–${route.to || toIcao}, but the aircraft is not on that line, so the route is not shown.` };
   return { route, routeNote: null };
 }
+
+// ---------- every flight near one airport (the board's live statuses) ----------
+// One adsb.lol call for the area around the airport (stored a few minutes,
+// shared by all visitors). An aircraft is kept when its callsign's VRS route
+// starts or ends at this airport and it is on that route's line (or at one of
+// its airports). The page then matches these aircraft to the board's flights.
+export const AIRPORT_LIVE_FRESH_MS = 4 * 60 * 1000;
+const ROUTE_FILES_AT_ONCE = 6;
+
+const airlinesMap = (store, now, fetchImpl) =>
+  cachedFile(store, "airlines", AIRLINES_FRESH_MS, now, async () => parseAirlinesCsv(await getText(`${STANDING_DATA}/airlines/schema-01/airlines.csv`, fetchImpl)));
+
+// airport: { iata, lat, lon }. airportByIcao: ICAO -> { iata, lat, lon } | null.
+// Body: { status, aircraft: [ { ...live, from, to, airlineIcao, airlineIata: [] } ], nearby, fetchedAt }
+export function getAirportLive(airport, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP, airportByIcao = () => null } = {}) {
+  return stored({
+    store, now, key: "airport/" + airport.iata, freshMs: AIRPORT_LIVE_FRESH_MS,
+    dailyKey: "adsb/" + new Date(now).toISOString().slice(0, 10), dailyCap,
+    call: async () => {
+      let json;
+      try { json = await getJson(`https://api.adsb.lol/v2/point/${airport.lat.toFixed(3)}/${airport.lon.toFixed(3)}/${NEAR_RADIUS_NM}`, fetchImpl); }
+      catch (err) { throw Object.assign(new Error("adsb.lol " + err.message), { status: err.status }); }
+      const nearby = (Array.isArray(json?.ac) ? json.ac : []).map(a => normalizeAdsb(a, now)).filter(a => a.callsign && /^[A-Z]{3}[A-Z0-9]{1,5}$/.test(a.callsign.toUpperCase()));
+      // Route files of the airlines seen (stored 1 day), a few at a time.
+      const prefixes = [...new Set(nearby.map(a => a.callsign.toUpperCase().slice(0, 3)))];
+      const routes = {};
+      for (let i = 0; i < prefixes.length; i += ROUTE_FILES_AT_ONCE) {
+        await Promise.all(prefixes.slice(i, i + ROUTE_FILES_AT_ONCE).map(async p => { routes[p] = await airlineRoutes(p, store, now, fetchImpl).catch(() => null); }));
+      }
+      const iataOf = {};
+      try { for (const [iata, icaos] of Object.entries(await airlinesMap(store, now, fetchImpl))) for (const i of icaos) (iataOf[i] ??= []).push(iata); }
+      catch { /* the airline's IATA code is only a help for matching */ }
+      const out = [];
+      for (const ac of nearby) {
+        const cs = ac.callsign.toUpperCase(), prefix = cs.slice(0, 3);
+        const r = routes[prefix]?.[cs];
+        if (!r) continue;
+        const [fromIcao, toIcao] = r.split("-");
+        const A = airportByIcao(fromIcao), B = airportByIcao(toIcao);
+        if (!A || !B || (A.iata !== airport.iata && B.iata !== airport.iata)) continue;
+        const p = { lat: ac.lat, lon: ac.lon };
+        if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon) || !Number.isFinite(A.lat) || !Number.isFinite(B.lat)) continue;
+        const atAirport = distNm(p, A) <= ROUTE_NEAR_AIRPORT_NM || distNm(p, B) <= ROUTE_NEAR_AIRPORT_NM;
+        if (!atAirport && !onRoute(p, A, B).ok) continue;
+        out.push({ ...ac, callsign: cs, from: A.iata, to: B.iata, airlineIcao: prefix, airlineIata: iataOf[prefix] || [] });
+      }
+      return { aircraft: out, nearby: nearby.length, source: [ADSBLOL, VRS] };
+    },
+  });
+}

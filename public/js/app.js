@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath, fetchAirportLive, matchBoardLive } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, isPastFlight, splitBoard, schedMs, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -284,6 +284,28 @@ async function loadFlights(a, quiet = false) {
   }
   renderAll();
   openFlightFromUrl();
+  if (flightState.kind === "live") loadBoardLive(a);
+}
+
+// ---------- live statuses for the whole board (adsb.lol + VRS routes, free) ----------
+const BOARD_LIVE_MS = 8 * 60 * 1000;
+const boardLiveAc = new Map(); // flight id -> aircraft matched to it
+let boardLiveCount = 0;
+async function loadBoardLive(a) {
+  if (!Number.isFinite(a.lat)) return;
+  let body;
+  try { body = await fetchAirportLive(a.iata); } catch { return; }
+  if (current !== a || flightState.kind !== "live" || body.status !== "ok") return;
+  const matches = matchBoardLive(flightState.flights, body.aircraft, a.iata);
+  boardLiveAc.clear();
+  boardLiveCount = 0;
+  for (const [id, ac] of matches) {
+    const f = flightState.flights.find(x => x.id === id);
+    const st = liveStatus(f, ac, lookup(f.departure.airport.iata), lookup(f.arrival.airport.iata));
+    boardLiveAc.set(id, ac);
+    if (st) { liveSeen.set(id, st); boardLiveCount++; }
+  }
+  renderFlights();
 }
 
 function renderAll() { renderOverview(); renderTraffic(); renderFlights(); renderSide(); }
@@ -430,7 +452,8 @@ function renderFlights() {
   $("flightsBadge").textContent = kind === "demo" ? "DEMO FLIGHTS" : kind === "live" ? (body.board.live ? "● LIVE · AERODATABOX" : "SCHEDULE ONLY · AERODATABOX") : "FLIGHTS";
   const credit = `Flight data: <a href="https://aerodatabox.com/" target="_blank" rel="noopener">AeroDataBox</a>.`;
   const notice = kind === "live" && body.notice ? ` <span class="board-note-warn">${esc(body.notice)}${body.stale ? ` Showing the board from ${esc(airportClock(body.board.fetchedAt))}.` : ""}</span>` : "";
-  $("boardNote").innerHTML = kind === "live" ? `Times are local airport time. Select a flight for route, times, aircraft and destination weather. ${credit}${notice}`
+  const liveNote = kind === "live" && boardLiveCount ? ` Live ADS-B status for ${boardLiveCount} flight${boardLiveCount === 1 ? "" : "s"} (<a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a>).` : "";
+  $("boardNote").innerHTML = kind === "live" ? `Times are local airport time. Select a flight for route, times, aircraft and destination weather. ${credit}${liveNote}${notice}`
     : kind === "demo" ? "Demo flights, not live. Select any flight to open its details."
     : kind === "loading" ? "Loading flights…" : esc(flightState.message);
 
@@ -572,7 +595,7 @@ function renderFlightDrawer() {
     const pos = { lat: fd.live.lat, lon: fd.live.lon }, done = haversineKm(depAp, pos), left = haversineKm(pos, arrAp);
     const seen = `seen ${relative({ utc: fd.live.seenAt })}`;
     if (ls.key === "landed") { prog.state = "after"; prog.pct = 100; trackNote = `<span>Landed · on the ground at ${esc(arrAp.iata)} (live data, ${seen})</span><span></span>`; }
-    else if (ls.key === "ground") { prog.state = "before"; prog.pct = 0; trackNote = `<span>On the ground at ${esc(depAp.iata)} (live data, ${seen})</span><span></span>`; }
+    else if (ls.key === "ground" || ls.key === "taxi") { prog.state = "before"; prog.pct = 0; trackNote = `<span>${ls.key === "taxi" ? "Taxiing" : "On the ground"} at ${esc(depAp.iata)} (live data, ${seen})</span><span></span>`; }
     else if (done !== null && left !== null) { prog.state = "air"; prog.live = true; prog.pct = Math.round((100 * done) / (done + left)); trackNote = `<span>Live position · ${fmtNum(left)} km to ${esc(arrAp.iata)}</span><span>${seen}</span>`; }
   }
   const pct = prog.pct ?? 0;
@@ -662,6 +685,9 @@ const AIRBORNE = ["departed", "en-route", "approaching"];
 async function lookupAircraft(f) {
   if (f.demo) { fd.aircraftNote = "Demo flight: no aircraft lookup."; renderFlightDrawer(); return; }
   let reg = f.aircraft.registration, regFrom = reg ? "board" : null, why = "";
+  // Already matched by the board's live check: no extra lookup needed.
+  const known = boardLiveAc.get(f.id);
+  if (!reg && known?.registration && !typeConflicts(known.typeCode, f.aircraft.model)) { reg = known.registration; regFrom = "adsb"; setLive(f, known); }
   const cand = callsignFor(f);
   if (!reg) {
     fd.aircraftNote = "Looking for this flight in live ADS-B data…";
@@ -953,6 +979,7 @@ $("refreshBtn").onclick = () => { if (current) { showAirport(current); showToast
 let resizeT;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(renderTraffic, 200); });
 setInterval(() => { if (current && document.visibilityState === "visible") loadFlights(current, true); }, FLIGHTS_REFRESH_MS);
+setInterval(() => { if (current && flightState.kind === "live" && document.visibilityState === "visible") loadBoardLive(current); }, BOARD_LIVE_MS);
 // Every minute: refresh age labels, statuses that became overdue, progress (no new request).
 setInterval(() => {
   if (!current || document.visibilityState !== "visible") return;

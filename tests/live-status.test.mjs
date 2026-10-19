@@ -25,6 +25,11 @@ test("liveStatus: on the ground at the origin -> not left yet", () => {
   assert.equal(s.label, "On the ground at OTP (live data)");
 });
 
+test("liveStatus: moving on the ground at the origin -> taxiing", () => {
+  const s = liveStatus(flight(-5, 175), ac({ onGround: true, groundSpeedKt: 14, lat: 44.57, lon: 26.09 }), OTP, VLC, now);
+  assert.equal(s.label, "Taxiing at OTP (live data)");
+});
+
 test("liveStatus: on the ground elsewhere -> no claim", () => {
   assert.equal(liveStatus(flight(), ac({ onGround: true }), OTP, VLC, now), null);
 });

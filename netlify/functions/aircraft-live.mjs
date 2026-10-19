@@ -2,10 +2,11 @@
 //   GET /api/aircraft-photo/YR-ASA -> real photo of that aircraft (Planespotters.net, stored 7 days)
 //   GET /api/live/WZZ3185          -> the aircraft flying this callsign now (adsb.lol, stored 5 min)
 //   GET /api/aircraft-now/YR-ASA   -> where this aircraft is now and its route (adsb.lol + VRS, stored 2 min)
+//   GET /api/airport-live/OTP      -> aircraft flying to or from this airport now (adsb.lol + VRS, stored 4 min)
 import { getStore } from "@netlify/blobs";
 import { memoryStore } from "../lib/flights/budget.mjs";
 import { isRegistration } from "../lib/flights/details.mjs";
-import { getAircraftPhoto, getLiveAircraft, getAircraftNow, identifyFlight, isCallsign, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
+import { getAircraftPhoto, getLiveAircraft, getAircraftNow, getAirportLive, identifyFlight, isCallsign, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
 import { findAirport, isAirportCode, iataForIcao } from "../lib/airports.mjs";
 
 const env = name => (globalThis.Netlify?.env?.get(name) ?? process.env[name]) || null;
@@ -29,7 +30,14 @@ export default async (req, context) => {
   const p = context?.params || {};
   let result;
   try {
-    if (p.airline !== undefined) {
+    if (p.code !== undefined) {
+      const code = String(p.code).toUpperCase();
+      const a = isAirportCode(code) ? findAirport(code) : null;
+      if (!a) return json({ error: "Use a known 3-letter airport code, e.g. /api/airport-live/OTP." }, 400, 86400);
+      if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon)) return json({ error: `No position known for ${code}.` }, 404, 86400);
+      const airportByIcao = icao => { const x = findAirport(iataForIcao(icao)); return x && { iata: x.iata, lat: x.lat, lon: x.lon }; };
+      result = await getAirportLive({ iata: a.iata, lat: a.lat, lon: a.lon }, { store: liveStore(), airportByIcao, dailyCap: Number(env("ADSB_DAILY_CAP")) || DEFAULT_ADSB_DAILY_CAP });
+    } else if (p.airline !== undefined) {
       const airline = String(p.airline).toUpperCase(), from = String(p.from).toUpperCase(), to = String(p.to).toUpperCase();
       const number = /^\d{1,4}[A-Z]?$/.test(String(p.number).toUpperCase()) ? String(p.number).toUpperCase() : null; // "-" when unknown
       const lat = Number(p.lat), lon = Number(p.lon);
@@ -59,7 +67,7 @@ export default async (req, context) => {
 };
 
 export const config = {
-  path: ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
+  path: ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/airport-live/:code", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
   method: "GET",
   rateLimit: { windowLimit: 30, windowSize: 60, aggregateBy: ["ip", "domain"] },
 };

@@ -3,7 +3,7 @@
 // at night, and only while the page is visible (see wall-model.js).
 import { indexAirports, findAirport, airportPath, airportLocation } from "./airports.js";
 import { demoFlights } from "./demo-data.js";
-import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, ago } from "./flights.js";
+import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, ago, fetchAirportLive, matchBoardLive, liveStatus } from "./flights.js";
 import { fetchWeather, iconFor, fmtTemp } from "./weather.js";
 import { wallRows, shouldReload, isNight, pageOf, PAGE_MS } from "./wall-model.js";
 import { loadLogos, airlineBadge } from "./logos.js";
@@ -15,11 +15,10 @@ const alBadge = airlineBadge;
 const fmtClock = (tz, d = new Date(), opts = {}) => new Intl.DateTimeFormat("en-GB", { timeZone: tz || "UTC", hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(d);
 const WEATHER_MS = 15 * 60 * 1000; // weather is free (our cached function)
 
-let airport = null, state = { kind: "loading", flights: [] }, lastLoad = NaN, weather = null, page = 0, wake = null;
+let airport = null, index = null, state = { kind: "loading", flights: [] }, lastLoad = NaN, weather = null, page = 0, wake = null;
 
 async function start() {
   const m = location.pathname.match(/^\/board\/([A-Za-z0-9]{3,4})\/?$/);
-  let index;
   try { index = indexAirports(await (await fetch("/data/airports.json")).json()); }
   catch (err) { return fatal("Couldn't load the airport list (" + err.message + ")."); }
   airport = m ? findAirport(index, m[1]) : null;
@@ -40,6 +39,7 @@ async function start() {
     render();
   }, 60 * 1000);
   setInterval(() => { if (document.visibilityState === "visible" && !isNight(airport.tz)) loadWeather(); }, WEATHER_MS);
+  setInterval(() => { if (document.visibilityState === "visible" && !isNight(airport.tz)) loadLive(); }, LIVE_MS);
   setInterval(() => { page++; render(); }, PAGE_MS);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
@@ -73,6 +73,23 @@ async function loadFlights() {
   } else if (body.board) state = { kind: "live", flights: [...body.board.departures, ...body.board.arrivals], body };
   else state = { kind: "none", flights: [], message: body.notice || "Flight data is unavailable right now." };
   render();
+  loadLive();
+}
+
+// Live statuses from ADS-B for the board's flights (free; every 10 minutes, not at night).
+const LIVE_MS = 10 * 60 * 1000;
+const liveById = new Map();
+async function loadLive() {
+  if (state.kind !== "live" || !Number.isFinite(airport.lat)) return;
+  let body;
+  try { body = await fetchAirportLive(airport.iata); } catch { return; }
+  if (body.status !== "ok") return;
+  for (const [id, ac] of matchBoardLive(state.flights, body.aircraft, airport.iata)) {
+    const f = state.flights.find(x => x.id === id);
+    const st = liveStatus(f, ac, findAirport(index, f.departure.airport.iata), findAirport(index, f.arrival.airport.iata));
+    if (st) liveById.set(id, st);
+  }
+  render();
 }
 
 async function loadWeather() {
@@ -97,7 +114,7 @@ function perPage(box) {
 }
 
 function rowHtml(f, now) {
-  const h = here(f), o = other(f), st = statusView(f, now), up = updateTime(f);
+  const h = here(f), o = other(f), st = statusView(f, now, liveById.get(f.id)), up = updateTime(f);
   const sched = hhmm(h.scheduled), changed = up.time !== "—" && up.time !== sched, late = lateMinutes(f);
   const gate = f.direction === "arrival" ? (h.baggageBelt || "—") : (h.gate || "—");
   return `<div class="wall-row s-${st.cls || "ok"}" role="listitem">
