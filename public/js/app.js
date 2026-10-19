@@ -649,6 +649,7 @@ async function lookupAircraft(f) {
         else if (body.status !== "ok") why = body.notice || "live data unavailable";
         else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
         else if (!body.airlineNearby) why = `no ${icao} aircraft within 250 nm (${body.nearby ?? 0} aircraft seen)`;
+        else if (!body.candidates) why = `${body.airlineNearby} ${icao} aircraft nearby, none on the ${from.iata}–${to.iata} line or at either airport`;
         else why = `checked ${(body.checked || []).map(c => `${c.callsign} ${c.route || "route unknown"}`).join(", ")}; none on ${from.iata}–${to.iata}`;
       } catch (err) { why = "live lookup failed (" + err.message + ")"; }
     }

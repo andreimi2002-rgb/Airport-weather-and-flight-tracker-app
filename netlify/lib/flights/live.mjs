@@ -123,7 +123,8 @@ export function getLiveAircraft(callsign, { store, now = Date.now(), fetchImpl =
 export const NEAR_RADIUS_NM = 250;   // adsb.lol maximum
 export const NEAR_FRESH_MS = 2 * 60 * 1000;
 export const ROUTE_FRESH_MS = 6 * 3600 * 1000;
-const MAX_ROUTE_LOOKUPS = 4;
+export const UNKNOWN_ROUTE_FRESH_MS = 20 * 60 * 1000; // "route unknown" is asked again sooner
+const MAX_ROUTE_LOOKUPS = 6;
 const ADSB_GAP_MS = 300; // adsb.lol allows about 4 requests a second
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
@@ -136,9 +137,10 @@ async function spendAdsb(store, now, cap) {
   await store.setJSON(key, day);
 }
 
-async function cachedAdsb(store, key, freshMs, now, cap, load) {
+// nullFreshMs: how long an empty answer (e.g. "route unknown") is reused; often shorter.
+async function cachedAdsb(store, key, freshMs, now, cap, load, nullFreshMs = freshMs) {
   const saved = await store.get(key, { type: "json" });
-  if (saved && now - Date.parse(saved.fetchedAt) < freshMs) return saved.value;
+  if (saved && now - Date.parse(saved.fetchedAt) < (saved.value === null ? nullFreshMs : freshMs)) return saved.value;
   await spendAdsb(store, now, cap);
   let value;
   // Spaced out, and one retry after a "too many requests".
@@ -156,7 +158,35 @@ export function normalizeRoute(json) {
   return m ? { from: m[1], to: m[2], airline: str(json.airline_code), plausible: json.plausible !== false } : null;
 }
 
-// q: { airline: "WMT", number: "3185" | null, from: "MXP", to: "OTP", lat, lon } (position where the flight should be now)
+// ---------- geometry: is an aircraft on the route between two airports? ----------
+const R_NM = 3440.065;
+const rad = x => (x * Math.PI) / 180;
+export function distNm(a, b) {
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lon - a.lon) / 2) ** 2;
+  return 2 * R_NM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function bearing(a, b) {
+  const y = Math.sin(rad(b.lon - a.lon)) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lon - a.lon));
+  return Math.atan2(y, x);
+}
+// Sideways distance from the great circle A->B, and how far along it (nm; negative = behind A).
+export function routeOffset(p, A, B) {
+  const d13 = distNm(A, p) / R_NM, t = bearing(A, p) - bearing(A, B);
+  const xt = Math.asin(Math.sin(d13) * Math.sin(t));
+  const at = Math.acos(Math.max(-1, Math.min(1, Math.cos(d13) / Math.cos(xt)))) * Math.sign(Math.cos(t) || 1);
+  return { crossNm: Math.abs(xt) * R_NM, alongNm: at * R_NM };
+}
+// On the route: within 60 nm of the line between the airports, or on/near one of them.
+export function onRoute(p, A, B) {
+  if (!Number.isFinite(p?.lat) || !Number.isFinite(p?.lon)) return { ok: false, score: Infinity };
+  if (distNm(p, A) <= 10 || distNm(p, B) <= 10) return { ok: true, score: 0 };
+  const { crossNm, alongNm } = routeOffset(p, A, B);
+  return { ok: crossNm <= 60 && alongNm >= -30 && alongNm <= distNm(A, B) + 30, score: crossNm };
+}
+
+// q: { airline: "WMT", number: "3185" | null, from: "MXP", to: "OTP", lat, lon, fromPos?, toPos? }
+// (lat/lon: where the flight should be now; fromPos/toPos: the airports' coordinates)
 export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP } = {}) {
   const lat = Math.round(q.lat * 2) / 2, lon = Math.round(q.lon * 2) / 2; // 0.5° grid: nearby lookups share one answer
   try {
@@ -169,22 +199,33 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
     const airlineAll = near.filter(a => a.callsign.toUpperCase().startsWith(q.airline));
     // An aircraft whose callsign is exactly the airline's ICAO code + our flight number (LO 646 -> LOT646) is checked first.
     const exact = q.number ? q.airline + q.number : null;
-    const mine = [...airlineAll].sort((x, y) => (y.callsign === exact) - (x.callsign === exact) || d2(x) - d2(y)).slice(0, MAX_ROUTE_LOOKUPS);
+    // With the airports' positions: only aircraft on this route's line (or at either airport), closest to the line first.
+    const hasRoute = q.fromPos && q.toPos;
+    const placed = airlineAll.map(a => ({ a, r: hasRoute ? onRoute(a, q.fromPos, q.toPos) : { ok: true, score: d2(a) } }));
+    const mine = placed.filter(x => x.r.ok || x.a.callsign === exact)
+      .sort((x, y) => (y.a.callsign === exact) - (x.a.callsign === exact) || x.r.score - y.r.score)
+      .map(x => x.a).slice(0, MAX_ROUTE_LOOKUPS);
     const seen = [];
     const matches = [];
     for (const a of mine) {
       // adsb.lol answers HTTP 500/404 when it doesn't know a callsign's route: that is "no route", not a failure.
       const route = await cachedAdsb(store, "route/" + a.callsign, ROUTE_FRESH_MS, now, dailyCap, async () => {
         try { return normalizeRoute(await getJson(`https://api.adsb.lol/api/0/route/${encodeURIComponent(a.callsign)}/${a.lat ?? lat}/${a.lon ?? lon}`, fetchImpl)); }
-        catch (err) { if (err.status === 500 || err.status === 404) return null; throw err; }
-      });
+        catch (err) {
+          if (err.status !== 500 && err.status !== 404) throw err;
+          // The route service sometimes answers 500 for a moment: ask once more before calling it unknown.
+          await sleep(600);
+          try { return normalizeRoute(await getJson(`https://api.adsb.lol/api/0/route/${encodeURIComponent(a.callsign)}/${a.lat ?? lat}/${a.lon ?? lon}`, fetchImpl)); }
+          catch (e2) { if (e2.status === 500 || e2.status === 404) return null; throw e2; }
+        }
+      }, UNKNOWN_ROUTE_FRESH_MS);
       seen.push({ callsign: a.callsign, route: route ? route.from + "-" + route.to : null });
       if (route && route.plausible && route.from === q.from && route.to === q.to) matches.push({ ...a, route });
       // Callsign = our flight number and no known route saying otherwise: the same flight.
       else if (!route && a.callsign === exact) matches.push({ ...a, route: { from: q.from, to: q.to, airline: q.airline, plausible: true, byNumber: true } });
     }
     // Exactly one aircraft of this airline on exactly this route; anything else is not trusted.
-    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, nearby: near.length, airlineNearby: airlineAll.length, candidates: mine.length, checked: seen, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };
+    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, nearby: near.length, airlineNearby: airlineAll.length, onRouteLine: placed.filter(x => x.r.ok).length, candidates: mine.length, checked: seen, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };
   } catch (err) {
     return { body: base(err.quota ? "quota" : "error", { aircraft: null, notice: err.quota ? err.message : "adsb.lol " + err.message }), cacheSeconds: 60 };
   }

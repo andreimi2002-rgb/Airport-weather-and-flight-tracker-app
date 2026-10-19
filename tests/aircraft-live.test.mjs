@@ -174,3 +174,52 @@ test("flight number digits for the identify request", async () => {
   assert.equal(flightDigits({ number: "BA 48A" }), "48A");
   assert.equal(flightDigits({ number: "—" }), "-");
 });
+
+test("only aircraft on the route's line (or at an airport) are checked", async () => {
+  const { identifyFlight, onRoute } = await import("../netlify/lib/flights/live.mjs");
+  const OTPp = { lat: 44.57, lon: 26.08 }, VLCp = { lat: 39.49, lon: -0.48 };
+  assert.equal(onRoute({ lat: 44.4, lon: 24.0 }, OTPp, VLCp).ok, true, "west of OTP on the way to VLC");
+  assert.equal(onRoute({ lat: 47.0, lon: 28.8 }, OTPp, VLCp).ok, false, "Chisinau area: not on OTP-VLC");
+  assert.equal(onRoute({ lat: 44.575, lon: 26.09 }, OTPp, VLCp).ok, true, "at OTP");
+  const near = { ac: [
+    { flight: "WMT3FJ  ", r: "9H-A", t: "A21N", alt_baro: 30000, lat: 46.9, lon: 28.5 },   // BLQ-RMO, near Chisinau
+    { flight: "WMT515N ", r: "9H-B", t: "A21N", alt_baro: 30000, lat: 46.6, lon: 23.5 },   // CLJ-FCO, north
+    { flight: "WMT969  ", r: "9H-C", t: "A321", alt_baro: 30000, lat: 42.0, lon: 20.0 },   // far south-west
+    { flight: "WMT1LH  ", r: "HA-LXP", t: "A321", alt_baro: 18000, lat: 44.5, lon: 24.6 }, // on the OTP-VLC line
+  ] };
+  const routes = { WMT1LH: "OTP-VLC", WMT3FJ: "BLQ-RMO", WMT515N: "CLJ-FCO", WMT969: "TIA-TRF" };
+  const asked = [];
+  const f = async url => {
+    if (url.includes("/v2/point/")) return ok(near);
+    const cs = /route\/([A-Z0-9]+)\//.exec(url)[1]; asked.push(cs);
+    return ok({ _airport_codes_iata: routes[cs], plausible: true });
+  };
+  const r = await identifyFlight({ airline: "WMT", number: "3185", from: "OTP", to: "VLC", lat: 44.57, lon: 26.08, fromPos: OTPp, toPos: VLCp }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft.registration, "HA-LXP");
+  assert.deepEqual(asked, ["WMT1LH"], "off-route aircraft are not looked up");
+});
+
+test("a momentary 500 from the route service is asked again; 'unknown' is kept only 20 minutes", async () => {
+  const { identifyFlight, UNKNOWN_ROUTE_FRESH_MS } = await import("../netlify/lib/flights/live.mjs");
+  const near = { ac: [{ flight: "WMT367  ", r: "HA-LGI", t: "A21N", alt_baro: 13000, lat: 44.6, lon: 26.0 }] };
+  let routeCalls = 0, fail = true;
+  const f = async url => {
+    if (url.includes("/v2/point/")) return ok(near);
+    routeCalls++;
+    if (fail) { fail = false; return new Response("Internal Server Error", { status: 500 }); }
+    return ok({ _airport_codes_iata: "TLV-OTP", plausible: true });
+  };
+  const q = { airline: "WMT", number: "-", from: "TLV", to: "OTP", lat: 44.57, lon: 26.08 };
+  const r = await identifyFlight(q, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft.registration, "HA-LGI", "second try found the route");
+  assert.equal(routeCalls, 2);
+  // Always unknown: stored, but asked again after 20 minutes.
+  const store = memoryStore(); let calls = 0;
+  const g = async url => url.includes("/v2/point/") ? ok(near) : (calls++, new Response("x", { status: 500 }));
+  await identifyFlight(q, { store, now: NOW, fetchImpl: g });
+  const before = calls;
+  await identifyFlight(q, { store, now: NOW + 5 * 60000, fetchImpl: g });
+  assert.equal(calls, before, "within 20 minutes: not asked again");
+  await identifyFlight(q, { store, now: NOW + UNKNOWN_ROUTE_FRESH_MS + 60000, fetchImpl: g });
+  assert.ok(calls > before, "after 20 minutes: asked again");
+});
