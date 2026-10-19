@@ -1,6 +1,6 @@
 // Flights on the page: fetches /api/flights/<IATA> (a Netlify Function that
 // asks AeroDataBox) and turns normalized flights into what the board shows.
-import { STATUS_LABEL, isDelayed, isDone, isOverdue } from "./flight-model.js";
+import { STATUS_LABEL, isDelayed, isDone, isOverdue, isCancelled } from "./flight-model.js";
 import { haversineKm } from "./insights.js";
 
 // "just now", "18 min ago", "1 h 5 min ago"
@@ -37,6 +37,30 @@ export const hhmm = t => (t?.local && /T\d\d:\d\d/.test(t.local) ? t.local.slice
 
 export const here = f => (f.direction === "departure" ? f.departure : f.arrival);
 export const other = f => (f.direction === "departure" ? f.arrival : f.departure);
+
+// ---------- board order ----------
+// Scheduled time at this airport, as a number (the provider's strings are not
+// compared as text).
+export function schedMs(f) {
+  const s = here(f).scheduled;
+  const t = Date.parse(s?.utc);
+  return Number.isFinite(t) ? t : Date.parse(s?.local) || 0;
+}
+
+// Already happened: landed/departed, or cancelled / not reported with its time passed.
+export function isPastFlight(f, now = Date.now()) {
+  if (isDone(f)) return true;
+  if (f.demo) return false;
+  if (isCancelled(f) || isOverdue(f, now)) { const t = Date.parse((here(f).revised || here(f).scheduled)?.utc); return Number.isFinite(t) && t < now; }
+  return false;
+}
+
+// The board split at "now": flights that already happened, then the ones
+// still to come, each in scheduled order (as airport boards do).
+export function splitBoard(list, now = Date.now()) {
+  const sorted = [...list].sort((a, b) => schedMs(a) - schedMs(b));
+  return { earlier: sorted.filter(f => isPastFlight(f, now)), upcoming: sorted.filter(f => !isPastFlight(f, now)) };
+}
 
 // Label and colour class for the status pill.
 // live: liveStatus() for this flight, if any. While fresh it wins over the

@@ -3,7 +3,7 @@ import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
 import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
-import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
+import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, isPastFlight, splitBoard, schedMs, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, tafGroups, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
 import { punctuality, hourlyTraffic, topBy, airlineKey, routeKey, aircraftKey, lateMinutes, flightProgress, relative, haversineKm, milestones } from "./insights.js";
@@ -108,6 +108,7 @@ function showAirport(a) {
   document.title = `${a.iata} · ${a.name} — Airport Live`;
   $("flightSearch").value = "";
   $("statusFilter").value = "all";
+  showEarlier = false;
   closeDrawer("flightModal"); closeDrawer("weatherModal");
 
   const kind = [TYPE_LABELS[a.type], a.scheduled ? "Scheduled flights" : "No scheduled flights listed"].join(" · ");
@@ -366,13 +367,10 @@ $("trafficChart").addEventListener("pointermove", e => {
 $("trafficChart").addEventListener("pointerleave", () => { const t = $("trafficTip"); if (t) t.style.opacity = 0; });
 
 // ---------- board ----------
-const sortKey = f => here(f).scheduled?.utc || here(f).scheduled?.local || "";
-const isPast = (f, now = Date.now()) => {
-  if (isDone(f)) return true;
-  if (f.demo) return false;
-  if (isCancelled(f) || isOverdue(f, now)) { const t = Date.parse((here(f).revised || here(f).scheduled)?.utc); return Number.isFinite(t) && t < now; }
-  return false;
-};
+const isPast = isPastFlight;
+// The board starts at "now"; flights that already happened are folded away
+// until asked for (reset when the airport changes).
+let showEarlier = false;
 
 // Live statuses found by the flight drawer, by flight id. Kept across board
 // refreshes; statusView ignores them once they are older than LIVE_FRESH_MS.
@@ -384,10 +382,11 @@ function rowHtml(f, now) {
   const late = lateMinutes(f);
   const sched = hhmm(h.scheduled);
   const changed = up.time !== "—" && up.time !== sched;
+  // The scheduled time stays the big one (the board is in scheduled order); a new time goes under it.
   const timeCell = changed
-    ? `<span class="t1 struck">${esc(sched)}</span><span class="t2${late !== null && late < 0 ? " early" : ""}">${esc(up.time)}</span><small>${esc(up.note)}</small>`
+    ? `<span class="t1">${esc(sched)}</span><span class="t2${late !== null && late < 0 ? " early" : ""}">→ ${esc(up.time)}</span><small>${esc(up.note)}</small>`
     : `<span class="t1">${esc(sched)}</span><small>${up.time === "—" ? "Scheduled" : esc(up.note)}</small>`;
-  const dirLabel = mode === "all" ? `<span class="dir">${f.direction === "departure" ? "to" : "from"}</span>` : "";
+  const dirLabel = mode === "all" ? `<span class="dir ${f.direction}">${f.direction === "departure" ? "↗ to" : "↙ from"}</span>` : "";
   const gate = f.direction === "arrival"
     ? (h.baggageBelt ? "Belt " + h.baggageBelt : h.gate ? "Gate " + h.gate : "")
     : (h.gate ? "Gate " + h.gate : "");
@@ -425,8 +424,7 @@ function renderFlights() {
     .filter(f => !want || f.direction === want)
     .filter(f => status === "all" || stOf(f, now).label === status)
     .filter(f => !hidePast || !isPast(f, now))
-    .filter(f => [f.number, f.airline.name, f.airline.iata, placeName(other(f).airport), other(f).airport.iata, other(f).airport.name, f.aircraft.model, f.aircraft.registration, here(f).gate].join(" ").toLowerCase().includes(term))
-    .sort((x, y) => sortKey(x).localeCompare(sortKey(y)));
+    .filter(f => [f.number, f.airline.name, f.airline.iata, placeName(other(f).airport), other(f).airport.iata, other(f).airport.name, f.aircraft.model, f.aircraft.registration, here(f).gate].join(" ").toLowerCase().includes(term));
   $("routeHeader").textContent = mode === "arrivals" ? "Origin" : mode === "all" ? "From / to" : "Destination";
 
   $("flightsBadge").textContent = kind === "demo" ? "DEMO FLIGHTS" : kind === "live" ? (body.board.live ? "● LIVE · AERODATABOX" : "SCHEDULE ONLY · AERODATABOX") : "FLIGHTS";
@@ -437,12 +435,20 @@ function renderFlights() {
     : kind === "loading" ? "Loading flights…" : esc(flightState.message);
 
   if (kind === "loading") { $("flightRows").innerHTML = `<div class="skel"></div>`.repeat(6); $("emptyState").hidden = true; return; }
-  // "Now" divider before the first flight that is still to come.
-  let html = "", placed = kind !== "live" || !!term;
-  for (const f of list) {
-    if (!placed && !isPast(f, now)) { html += `<div class="now-line" role="presentation">NOW · ${esc(fmtClock(current.tz, new Date(now)))}</div>`; placed = true; }
-    html += rowHtml(f, now);
+  // Flights that already happened, a "now" divider, then the ones to come.
+  // Without a search or filter the earlier ones are folded under a button.
+  const { earlier, upcoming } = splitBoard(list, now);
+  const live = kind === "live";
+  const fold = live && !term && status === "all" && earlier.length > 0;
+  let html = "";
+  if (fold) {
+    const what = mode === "arrivals" ? "landed or cancelled" : mode === "departures" ? "departed or cancelled" : "departed, landed or cancelled";
+    html += `<button class="earlier-btn" id="earlierBtn" type="button" aria-expanded="${showEarlier}">${showEarlier ? "▴ Hide" : "▾ Show"} ${earlier.length} earlier flight${earlier.length === 1 ? "" : "s"} <span>${what}</span></button>`;
   }
+  if (!fold || showEarlier) html += earlier.map(f => rowHtml(f, now)).join("");
+  if (live && !term) html += `<div class="now-line" role="presentation">NOW · ${esc(fmtClock(current.tz, new Date(now)))}</div>`;
+  html += upcoming.map(f => rowHtml(f, now)).join("");
+  if (live && !term && list.length && !upcoming.length) html += `<div class="board-end">No more flights in this time window.</div>`;
   $("flightRows").innerHTML = html;
   const empty = $("emptyState");
   empty.hidden = list.length > 0;
@@ -451,6 +457,7 @@ function renderFlights() {
     : "No passenger flights listed in this time window.";
 }
 $("flightRows").addEventListener("click", e => {
+  if (e.target.closest("#earlierBtn")) { showEarlier = !showEarlier; renderFlights(); return; }
   const b = e.target.closest("[data-id]");
   if (b) openFlight(flightState.flights.find(f => f.id === b.dataset.id), b);
 });
@@ -469,7 +476,7 @@ function renderSide() {
     for (const id of ["topRoutes", "topAirlines", "topAircraft"]) $(id).innerHTML = `<div class="none">${none}</div>`;
     return;
   }
-  const sorted = [...flights].sort((x, y) => sortKey(x).localeCompare(sortKey(y)));
+  const sorted = [...flights].sort((x, y) => schedMs(x) - schedMs(y));
   const nx = [nextFlight(sorted, "departure"), nextFlight(sorted, "arrival")];
   $("nextList").innerHTML = nx.map((f, i) => {
     const dep = i === 0;

@@ -14,9 +14,11 @@ const T = m => Date.parse((m?.runway || m?.revised || m?.scheduled)?.utc);
 const S = m => Date.parse(m?.scheduled?.utc);
 const at = f => (f.direction === "departure" ? f.departure : f.arrival);
 
-// Flights for one side of the board, in scheduled order: upcoming ones, plus
-// recently finished ones for a short while.
+// Flights for one side of the board: recently finished ones first (for a
+// short while), then the ones still to come; each group in scheduled order.
 export function wallRows(flights, direction, now = Date.now()) {
+  // A cancelled flight counts as finished only once its time has passed.
+  const finished = f => isDone(f) || (f.status === "cancelled" && T(at(f)) < now);
   return flights
     .filter(f => f.direction === direction)
     .filter(f => {
@@ -25,7 +27,7 @@ export function wallRows(flights, direction, now = Date.now()) {
       if (isDone(f) || f.status === "cancelled") return t >= now - KEEP_DONE_MIN * 60000;
       return t >= now - KEEP_PAST_MIN * 60000;
     })
-    .sort((a, b) => (S(at(a)) || 0) - (S(at(b)) || 0));
+    .sort((a, b) => (finished(b) - finished(a)) || (S(at(a)) || 0) - (S(at(b)) || 0));
 }
 
 // Hour (0-23) at the airport.
