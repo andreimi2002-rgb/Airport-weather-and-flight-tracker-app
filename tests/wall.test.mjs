@@ -6,7 +6,7 @@ const now = Date.parse("2026-10-19T12:00:00Z");
 const t = min => ({ utc: new Date(now + min * 60000).toISOString() });
 const dep = (id, min, status = "expected", extra = {}) => ({ id, direction: "departure", status, departure: { scheduled: t(min), ...extra }, arrival: {} });
 
-test("wall rows: upcoming in order, finished flights only for a short while", () => {
+test("wall rows: finished flights first (only for a short while), then the rest in scheduled order", () => {
   const flights = [
     dep("later", 90), dep("soon", 10),
     dep("left-long-ago", -60, "departed"), dep("left-just-now", -10, "departed"),
@@ -14,7 +14,10 @@ test("wall rows: upcoming in order, finished flights only for a short while", ()
     dep("cancelled-old", -45, "cancelled"),
     { id: "arr", direction: "arrival", status: "expected", departure: {}, arrival: { scheduled: t(5) } },
   ];
-  assert.deepEqual(wallRows(flights, "departure", now).map(f => f.id), ["overdue", "left-just-now", "soon", "later"]);
+  assert.deepEqual(wallRows(flights, "departure", now).map(f => f.id), ["left-just-now", "overdue", "soon", "later"]);
+  // A flight cancelled for later stays in time order
+  const later = [dep("a", 10), dep("cancelled-later", 5, "cancelled"), dep("b", 20)];
+  assert.deepEqual(wallRows(later, "departure", now).map(f => f.id), ["cancelled-later", "a", "b"]);
   assert.deepEqual(wallRows(flights, "arrival", now).map(f => f.id), ["arr"]);
 });
 

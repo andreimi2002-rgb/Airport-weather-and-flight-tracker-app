@@ -613,3 +613,16 @@ body.wall{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow
 .credits-table td{overflow-wrap:anywhere}
 .credits-table th:first-child{width:46px}
 @media(max-width:760px){.credits-table{font-size:11px}.credits-table th,.credits-table td{padding:6px 4px}}
+
+/* ---------- board order: scheduled time big, new time under it; earlier flights folded ---------- */
+.c-time .t2{font-size:12.5px;margin-top:2px}
+.c-route .dir{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;margin-right:6px;padding:2px 5px;border-radius:5px}
+.c-route .dir.departure{color:var(--blue);background:#1c2e43}
+.c-route .dir.arrival{color:var(--green);background:#1a342d}
+.earlier-btn{display:flex;align-items:center;gap:10px;width:100%;border:0;border-bottom:1px solid var(--line);background:#0d151e;color:var(--muted);padding:11px 18px;font:600 12px var(--sans);text-align:left;cursor:pointer}
+.earlier-btn:hover{color:var(--text);background:#111c27}
+.earlier-btn span{font-weight:400;color:var(--dim)}
+.board-end{padding:18px;color:var(--muted);font-size:12px;text-align:center}
+.wall-row .w-new{display:block;font-size:.8em;color:var(--amber);font-weight:700}
+.wall-row .w-new.early{color:var(--green)}
+.wall-row.s-delayed .w-time b{color:inherit}

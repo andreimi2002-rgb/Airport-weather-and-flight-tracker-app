@@ -7,6 +7,7 @@ import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, ago
 import { fetchWeather, iconFor, fmtTemp } from "./weather.js";
 import { wallRows, shouldReload, isNight, pageOf, PAGE_MS } from "./wall-model.js";
 import { loadLogos, airlineBadge } from "./logos.js";
+import { lateMinutes } from "./insights.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -97,10 +98,10 @@ function perPage(box) {
 
 function rowHtml(f, now) {
   const h = here(f), o = other(f), st = statusView(f, now), up = updateTime(f);
-  const sched = hhmm(h.scheduled), changed = up.time !== "—" && up.time !== sched;
+  const sched = hhmm(h.scheduled), changed = up.time !== "—" && up.time !== sched, late = lateMinutes(f);
   const gate = f.direction === "arrival" ? (h.baggageBelt || "—") : (h.gate || "—");
   return `<div class="wall-row s-${st.cls || "ok"}" role="listitem">
-    <div class="w-time">${changed ? `<s>${esc(sched)}</s><b>${esc(up.time)}</b>` : `<b>${esc(sched)}</b>`}</div>
+    <div class="w-time"><b>${esc(sched)}</b>${changed ? `<span class="w-new${late !== null && late < 0 ? " early" : ""}">→ ${esc(up.time)}</span>` : ""}</div>
     <div class="w-flight">${alBadge(f)}<div><b>${esc(f.number)}</b><span>${esc(f.airline?.name || "")}</span></div></div>
     <div class="w-place"><b>${esc(placeName(o.airport))}</b><span>${esc(o.airport.iata || "")}</span></div>
     <div class="w-gate">${esc(gate)}${h.terminal ? `<span>T${esc(h.terminal)}</span>` : ""}</div>
