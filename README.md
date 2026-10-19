@@ -17,6 +17,7 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 - **Airport analytics, computed only from the flights on the board (no extra provider calls):** departures/arrivals with on-time/delayed/cancelled meters, on-time %, average and longest delay, traffic by hour (departures above, arrivals below, delayed part in amber, "now" marker, hover details), top destinations/origins, airlines and aircraft types.
 - **Flight board:** FIDS-style rows with a status stripe, struck-through scheduled time when it changed, delay chips (+23m), "NOW" divider, "Hide finished", search also by registration and gate. On phones the board is a card list (no more sideways scrolling).
 - **Flight drawer (FlightAware-style), with its own link (`/airport/SEA?flight=AS1221-d`):** route with both airports, scheduled duration and distance, progress estimated from the provider's departure/arrival times (labelled as such, not a live position), departure and arrival time tables (scheduled, estimated/actual, runway, terminal, gate, check-in desk/baggage belt), aircraft card and photo, timeline, and the current weather at the other airport. "Not available" where the provider gives nothing.
+- **Real aircraft photos:** when a flight is opened, the aircraft is identified by the board's registration or, if the board has none, by the aircraft that live ADS-B data (adsb.lol) shows flying the flight's callsign. A guessed callsign (airline ICAO + number) only counts when the aircraft type matches the board. The photo of that exact aircraft comes from Planespotters.net (photographer credited and linked); otherwise AeroDataBox's photo; otherwise "Aircraft not assigned yet". Airborne flights also show live altitude and speed.
 - **Weather drawer** (click the weather card): decoded METAR field by field, 24-hour temperature/precipitation chart, hourly wind and rain, TAF split into its change groups (FM/TEMPO/BECMG/PROB) with readable times.
 
 ## Still demo data (clearly labelled in the app)
@@ -60,6 +61,8 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `netlify/functions/flight-details.mjs` — `/api/aircraft/<REG>` and `/api/flight-status/<NUMBER>/<DATE>/<IATA>`
 - `netlify/lib/flights/details.mjs` — aircraft lookup (stored 7 days) and flight status (stored 5 min)
 - `netlify/lib/flights/budget.mjs` — the shared monthly unit budget
+- `netlify/functions/aircraft-live.mjs` — `/api/aircraft-photo/<REG>` (Planespotters.net, stored 7 days) and `/api/live/<CALLSIGN>` (adsb.lol, stored 5 min, daily cap 400, env `ADSB_DAILY_CAP`)
+- `netlify/lib/flights/live.mjs` — those two free sources
 - `netlify/lib/flights/aerodatabox.mjs` — AeroDataBox adapter (provider answer → Flight model)
 - `netlify/lib/flights/board.mjs` — stored boards, monthly budget, stale and quota states
 - `netlify/lib/airports.mjs` — airport lookup shared by the functions
@@ -78,6 +81,8 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 | [NOAA Aviation Weather Center](https://aviationweather.gov/data/api/) | METAR and TAF | US government data, public domain |
 | [MET Norway](https://api.met.no/) | Forecast (Locationforecast 2.0) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), credited in the app |
 | [AeroDataBox](https://aerodatabox.com/) via RapidAPI | Flights, aircraft model/registration, representative aircraft photos | Basic plan: non-commercial, attribution required (shown on the board) |
+| [Planespotters.net](https://www.planespotters.net/) photo API | Photo of the exact aircraft by registration | Photographer credited next to the photo and linked to the photo page (their API terms) |
+| [adsb.lol](https://adsb.lol/) | Live ADS-B: which aircraft flies a callsign now, altitude, speed | ODbL; free, no key today (they say a key will be required later) |
 | [Unsplash](https://unsplash.com) | One illustrative aircraft photo (demo flight detail) | Unsplash licence |
 
 ### Weather function

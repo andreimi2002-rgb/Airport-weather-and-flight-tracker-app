@@ -23,6 +23,8 @@ Agreed with the owner on 2026-10-19. Work in this order, one branch and one prev
 
 **Done in `feature/redesign` (2026-10-19):** step 4 (clickable weather with decoded METAR/TAF, 24 h chart) and part of stage A (a link per flight on the airport page, `?flight=`), plus airport analytics from the board and the phone board fix from item 6.
 
+**Real aircraft photos (2026-10-19, `feature/real-aircraft-photos`):** Planespotters.net photo by registration, registration from adsb.lol live data when the board has none. Replaces the Wikimedia aircraft-type photos idea (owner found photos in another airline's livery misleading).
+
 ## Then, toward FlightAware (stages A–E)
 | Stage | What | Needs |
 |---|---|---|

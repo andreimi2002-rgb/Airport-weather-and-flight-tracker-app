@@ -1,6 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
+import { fetchAircraftPhoto, fetchLive, callsignFor, typeMatches, liveLine } from "./flights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, tafGroups, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
@@ -550,7 +551,14 @@ function renderFlightDrawer() {
   // Photo
   let photoHtml, noteHtml = "";
   const p = fd.photo;
+  const reg = fd.reg || f.aircraft.registration || "";
   if (fd.photoKind === "demo") { photoHtml = `<img src="${esc(demoAircraftPhoto)}" alt="Illustrative aircraft photo">`; noteHtml = "Illustrative photo · not this aircraft"; }
+  else if (fd.photoKind === "planespotters" && p?.url) {
+    // Planespotters.net terms: photographer credit next to the photo, linked to the photo page.
+    const credit = `${esc(p.author || "Photographer unknown")} · Planespotters.net`;
+    photoHtml = `<img src="${esc(p.url)}" alt="Photo of aircraft ${esc(reg)}" onerror="this.parentElement.classList.add('no-photo')">`;
+    noteHtml = `Photo of this aircraft (${esc(reg)}) · ${p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${credit}</a>` : credit}`;
+  }
   else if (p?.url) {
     const by = [p.author, p.licence].filter(Boolean).map(esc).join(" · ");
     const credit = by ? " · " + (p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${by}</a>` : by) : "";
@@ -587,7 +595,8 @@ function renderFlightDrawer() {
 
     <div class="fd-sec"><h3>Aircraft <small>${esc(fd.aircraftNote)}</small></h3>
       <div class="ac"><div class="plane-photo${photoHtml ? "" : " no-photo"}">${photoHtml}<span class="photo-note">${noteHtml}</span></div>
-      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
+      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", fd.reg || f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
+      ${fd.live ? `<div class="note">Live ADS-B: <b>${esc(liveLine(fd.live))}</b> · ${esc(fd.live.callsign || "")} · seen ${esc(relative(fd.live.seenAt))} · data: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL)</div>` : ""}
     </div>
 
     <div class="fd-sec"><h3>Timeline</h3><ol class="timeline">${ms.map(x => `<li class="${x.key === "x" ? "bad" : x.done ? "done" : ""}">${esc(x.label)}${x.time ? ` · <span class="tl-t">${esc(hhmm(x.time))}</span><span class="tl-k">${x.kind}</span>` : ""}</li>`).join("")}</ol></div>
@@ -602,21 +611,51 @@ function renderFlightDrawer() {
 }
 
 const onlyReg = reg => ({ registration: reg, ageYears: null, seats: null, engines: null, engineType: null, deliveryDate: null, airline: null });
+const AIRBORNE = ["departed", "en-route", "approaching"];
+
+// Which aircraft is it? The board's registration, else the aircraft that live
+// ADS-B data (adsb.lol) shows flying this flight's callsign. Then a real photo
+// (Planespotters.net) and the details (AeroDataBox, 1 unit).
 async function lookupAircraft(f) {
-  const reg = f.aircraft.registration;
   if (f.demo) { fd.aircraftNote = "Demo flight: no aircraft lookup."; renderFlightDrawer(); return; }
-  if (!reg) { fd.aircraftNote = "No registration from the provider (yet)"; renderFlightDrawer(); return; }
+  let reg = f.aircraft.registration, regFrom = reg ? "board" : null;
+  const cand = callsignFor(f);
+  if (!reg && cand) {
+    fd.aircraftNote = "Looking for this flight in live ADS-B data…";
+    renderFlightDrawer();
+    try {
+      const body = await fetchLive(cand.callsign);
+      if (fd?.flight !== f) return;
+      const ac = body.aircraft;
+      // A guessed callsign only counts when the aircraft type matches the board.
+      if (ac?.registration && (cand.fromProvider || typeMatches(ac.typeCode, f.aircraft.model))) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
+    } catch { /* live data is a bonus; carry on without it */ }
+    if (fd?.flight !== f) return;
+  } else if (reg && cand?.fromProvider && AIRBORNE.includes(f.status)) {
+    // Known aircraft in the air: show its live altitude and speed (no lookup needed for the photo).
+    fetchLive(cand.callsign).then(body => { if (fd?.flight === f && body.aircraft?.registration === reg) { fd.live = body.aircraft; renderFlightDrawer(); } }).catch(() => {});
+  }
+  if (!reg) { fd.aircraftNote = "Aircraft not assigned yet: no registration from the provider or live ADS-B data"; renderFlightDrawer(); return; }
+
+  fd.reg = reg;
   fd.aircraftNote = "Looking up " + reg + "…";
   renderFlightDrawer();
-  let body;
-  try { body = await fetchAircraft(reg); }
-  catch (err) { if (fd?.flight === f) { fd.aircraft = onlyReg(reg); fd.aircraftNote = "Couldn't look up the aircraft (" + err.message + ")"; renderFlightDrawer(); } return; }
+  const [photoRes, detRes] = await Promise.allSettled([fetchAircraftPhoto(reg), fetchAircraft(reg)]);
   if (fd?.flight !== f) return;
-  const a = body.aircraft;
-  if (!a) { fd.aircraft = onlyReg(reg); fd.aircraftNote = body.status === "ok" ? `AeroDataBox has no record of ${reg}` : body.notice || "Aircraft details unavailable"; renderFlightDrawer(); return; }
-  fd.aircraft = a;
-  fd.aircraftNote = "AeroDataBox" + (body.fetchedAt ? " · looked up " + body.fetchedAt.slice(0, 10) : "") + (body.stale ? " · older lookup" : "");
-  if (a.photo) { fd.photo = a.photo; fd.photoKind = "this-aircraft"; }
+  const real = photoRes.status === "fulfilled" ? photoRes.value.photo : null;
+  let a = null, detNote;
+  if (detRes.status === "fulfilled") {
+    const body = detRes.value;
+    a = body.aircraft;
+    // Never mix two aircraft: details must be for the registration we identified.
+    if (a?.registration && a.registration.toUpperCase() !== reg.toUpperCase()) a = null;
+    detNote = a ? "AeroDataBox" + (body.fetchedAt ? " · looked up " + body.fetchedAt.slice(0, 10) : "") + (body.stale ? " · older lookup" : "")
+      : body.status === "ok" ? `AeroDataBox has no record of ${reg}` : body.notice || "Aircraft details unavailable";
+  } else detNote = "Couldn't look up the aircraft details";
+  fd.aircraft = a || onlyReg(reg);
+  if (real) { fd.photo = real; fd.photoKind = "planespotters"; }
+  else if (a?.photo) { fd.photo = a.photo; fd.photoKind = "this-aircraft"; }
+  fd.aircraftNote = [regFrom === "adsb" ? "Registration from live ADS-B (adsb.lol)" : null, detNote].filter(Boolean).join(" · ");
   renderFlightDrawer();
 }
 
