@@ -2,14 +2,6 @@
 // Replaced step by step by real sources (weather, flights, photos).
 // Anything not listed here is shown as "not available", never invented.
 
-// Sample weather for the four original prototype airports only.
-export const demoWeather = {
-  SEA: { temp: 14, condition: "Cloudy", icon: "☁", wind: "SW 12 kt", visibility: "10 km", ceiling: "2,400 ft", metar: "KSEA 191153Z 22012KT 10SM BKN024 14/10 A2992", metarText: "Wind from the southwest at 12 knots. Visibility 10 statute miles. Broken cloud layer at 2,400 feet." },
-  LHR: { temp: 12, condition: "Light rain", icon: "🌧", wind: "W 9 kt", visibility: "8 km", ceiling: "1,800 ft", metar: "EGLL 191150Z 26009KT 8000 -RA BKN018 12/09 Q1015", metarText: "Westerly wind at 9 knots. Light rain, visibility 8 kilometres and broken cloud at 1,800 feet." },
-  OTP: { temp: 16, condition: "Partly cloudy", icon: "⛅", wind: "NE 7 kt", visibility: "10 km", ceiling: "3,500 ft", metar: "LROP 191150Z 04007KT 9999 SCT035 16/08 Q1018", metarText: "Northeasterly wind at 7 knots. Good visibility and scattered clouds at 3,500 feet." },
-  JFK: { temp: 18, condition: "Clear", icon: "☀", wind: "NW 8 kt", visibility: "10 km", ceiling: "Clear", metar: "KJFK 191151Z 31008KT 10SM CLR 18/08 A3010", metarText: "Northwesterly wind at 8 knots. Excellent visibility with clear skies in this sample." },
-};
-
 // Illustrative aircraft photo for the demo flight detail (not the actual
 // aircraft; labelled as such). Airport and city photos now come from
 // Wikimedia Commons, see photos.js.

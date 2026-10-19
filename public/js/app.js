@@ -1,6 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
-import { demoWeather, demoAircraftPhoto, demoFlights, demoAirportCodes, flightStats } from "./demo-data.js";
+import { demoAircraftPhoto, demoFlights, demoAirportCodes, flightStats } from "./demo-data.js";
 import { getPhotos, creditHtml } from "./photos.js";
+import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const $ = id => document.getElementById(id);
@@ -146,13 +147,67 @@ async function renderPhotos(a) {
   setPhoto("city", p.city?.photo, "Photo of " + cityName, a.iata, cityName ? "No freely licensed photo found" : "");
 }
 
-function renderWeather(a) {
-  const w = demoWeather[a.iata];
-  if (w) {
-    setText({ temperature: w.temp + "°", condition: w.condition + " · demo conditions", weatherIcon: w.icon, wind: w.wind, visibility: w.visibility, ceiling: w.ceiling, metar: w.metar, metarText: w.metarText, weatherSub: "Conditions at the airport · sample report, not live" });
-  } else {
-    setText({ temperature: "—", condition: "Weather not connected yet", weatherIcon: "", wind: "—", visibility: "—", ceiling: "—", metar: "Not available yet", metarText: "Real METAR/TAF reports are planned for a later step.", weatherSub: "Conditions at the airport" });
+// quiet = background refresh: keep what is shown until the new answer arrives.
+async function renderWeather(a, quiet = false) {
+  if (!quiet) {
+    setText({ temperature: "—", condition: "Loading weather…", weatherIcon: "", wind: "—", visibility: "—", ceiling: "—", metar: "Loading…", metarText: "—", taf: "Loading…", tafMeta: "", weatherSub: "Conditions at the airport", weatherSource: "" });
+    $("condition").classList.remove("warn");
+    $("forecastRow").innerHTML = "";
   }
+  let res;
+  try {
+    res = await fetchWeather(a.iata);
+  } catch (err) {
+    console.error("Weather failed to load", err);
+    if (current !== a) return;
+    setText({ temperature: "—", condition: "Weather unavailable right now", weatherIcon: "", wind: "—", visibility: "—", ceiling: "—", metar: "Couldn't load the weather.", metarText: err.message, taf: "—", tafMeta: "" });
+    $("condition").classList.add("warn");
+    $("weatherSource").textContent = "Try the refresh button in a minute.";
+    $("forecastRow").innerHTML = `<div class="forecast-empty">Forecast unavailable</div>`;
+    return;
+  }
+  if (current !== a) return; // user already switched airport
+  const { metar: m, taf: t, forecast: fc } = res.data;
+  const hours = fc.status === "ok" ? fc.hours : [];
+  const nowFc = hours[0];
+
+  // Headline: the observed METAR; otherwise the forecast, clearly labelled.
+  let condition, warn = false;
+  if (m.status === "ok") {
+    const age = ageMinutes(m.observedAt);
+    condition = [m.condition || "Observed", m.flightCategory].filter(Boolean).join(" · ");
+    if (age !== null && age > STALE_METAR_MIN) { condition += ` · report is ${ageText(age).replace(" ago", "")} old`; warn = true; }
+    setText({ temperature: fmtTemp(m.tempC), weatherIcon: iconFor(m.icon, nowFc?.night), wind: m.wind || "Not reported", visibility: m.visibility || "Not reported", ceiling: m.ceiling || "Not reported" });
+  } else {
+    const why = m.status === "none" ? "no METAR station reporting" : "METAR unavailable right now";
+    condition = nowFc ? `Forecast: ${nowFc.label || "—"} · ${why}` : why[0].toUpperCase() + why.slice(1);
+    warn = m.status === "error";
+    setText({ temperature: nowFc ? fmtTemp(nowFc.tempC) : "—", weatherIcon: nowFc ? iconFor(nowFc.icon, nowFc.night) : "", wind: "No report", visibility: "No report", ceiling: "No report" });
+  }
+  $("condition").textContent = condition;
+  $("condition").classList.toggle("warn", warn);
+
+  // Aviation weather panel.
+  if (m.status === "ok") {
+    setText({ metar: stripType(m.raw), metarText: m.summary || "—", weatherSub: [m.station, m.stationName, "observed " + timeLabel(m.observedAt, a.tz), ageText(ageMinutes(m.observedAt))].filter(Boolean).join(" · ") });
+  } else {
+    setText({ metar: m.status === "none" ? "No METAR station at this airport." : "Couldn't load the METAR.", metarText: m.reason || m.message || "—", weatherSub: "Conditions at the airport" });
+  }
+  if (t.status === "ok") {
+    setText({ taf: stripType(t.raw), tafMeta: `Issued ${dayTimeUtc(t.issuedAt)} · valid ${dayTimeUtc(t.validFrom)} to ${dayTimeUtc(t.validTo)}` });
+  } else {
+    setText({ taf: t.status === "none" ? t.reason : "Couldn't load the TAF.", tafMeta: t.status === "error" ? t.message : "" });
+  }
+
+  // Next hours from MET Norway.
+  $("forecastHead").textContent = "NEXT HOURS · FORECAST" + (a.tz ? "" : " · UTC");
+  $("forecastRow").innerHTML = hours.length
+    ? forecastSlots(hours).map(h => `<div class="forecast-slot" title="${esc(h.label || "")}"><small>${esc(localHour(h.time, a.tz))}</small><span aria-hidden="true">${iconFor(h.icon, h.night)}</span><strong>${esc(fmtTemp(h.tempC))}</strong></div>`).join("")
+    : `<div class="forecast-empty">${esc(fc.status === "error" ? "Forecast unavailable right now" : fc.reason || "No forecast")}</div>`;
+
+  const updated = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false }).format(res.receivedAt);
+  $("weatherSource").innerHTML = `METAR/TAF: <a href="https://aviationweather.gov" target="_blank" rel="noopener">NOAA Aviation Weather Center</a> · Forecast: <a href="https://api.met.no/" target="_blank" rel="noopener">MET Norway</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> · Last updated ${updated} (your time)`
+    + (res.stale ? `<br><span class="warn">Couldn't refresh (${esc(res.error)}). Showing data received at ${updated}.</span>` : "");
 }
 
 function updateClock() {
@@ -320,8 +375,9 @@ document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
 });
 $("flightSearch").addEventListener("input", renderFlights);
 $("statusFilter").addEventListener("change", renderFlights);
-$("refreshBtn").onclick = () => { if (current) { showAirport(current); showToast("Refreshed · flights and weather are still demo data"); } };
+$("refreshBtn").onclick = () => { if (current) { showAirport(current); showToast("Refreshed · flights are still demo data"); } };
 window.addEventListener("popstate", route);
 setInterval(updateClock, 10000);
+setInterval(() => { if (current && document.visibilityState === "visible") renderWeather(current, true); }, REFRESH_MS);
 
 loadAirports();

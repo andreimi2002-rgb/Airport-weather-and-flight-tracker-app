@@ -18,8 +18,8 @@ test("flightStats counts match the listed flights", () => {
   assert.deepEqual(flightStats([]), { departures: 0, departuresOnTime: 0, arrivals: 0, arrivalsOnTime: 0, delays: 0, cancellations: 0 });
 });
 
-test("demo weather only for the four prototype airports", () => {
-  assert.deepEqual(Object.keys(demoWeather).sort(), ["JFK", "LHR", "OTP", "SEA"]);
+test("no demo weather remains (it comes from the weather function now)", () => {
+  assert.equal(demoWeather, undefined);
 });
 
 test("no demo airport/city photos remain (they come from Wikimedia now)", () => {
