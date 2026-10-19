@@ -2,7 +2,7 @@
 // They turn the OurAirports CSV files plus the mwgg time zone list into
 // the compact public/data/airports.json file the app loads.
 
-export const FIELDS = ["iata", "icao", "name", "city", "region", "country", "lat", "lon", "elevationFt", "type", "scheduled", "tz", "runways"];
+export const FIELDS = ["iata", "icao", "name", "city", "region", "country", "lat", "lon", "elevationFt", "type", "scheduled", "tz", "runways", "keywords"];
 
 // OurAirports type -> one-letter code used in the compact file.
 export const TYPE_CODES = { large_airport: "L", medium_airport: "M", small_airport: "S", seaplane_base: "W", heliport: "H" };
@@ -73,6 +73,17 @@ export function makeTimeZoneLookup(mwgg) {
   };
 }
 
+// Search keywords (other names, city codes like TYO). Only Latin-script
+// entries are kept; the app's search works on Latin letters.
+export function cleanKeywords(text) {
+  const seen = new Set();
+  for (const k of String(text || "").split(",")) {
+    const t = k.trim();
+    if (t && /^[\p{Script=Latin}0-9 .'’()\/-]+$/u.test(t)) seen.add(t);
+  }
+  return [...seen].join(", ") || null;
+}
+
 const num = v => (v === "" || v == null || Number.isNaN(Number(v)) ? null : Number(v));
 const round = (v, d) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 
@@ -109,6 +120,7 @@ export function buildAirportData({ airports, runways, countries, regions, mwgg, 
       a.scheduled_service === "yes" ? 1 : 0,
       tz,
       runwayCounts.has(a.ident) ? runwayCounts.get(a.ident) : null,
+      cleanKeywords(a.keywords),
     ]);
     stats.kept++;
     if (tz) stats.withTimeZone++;
