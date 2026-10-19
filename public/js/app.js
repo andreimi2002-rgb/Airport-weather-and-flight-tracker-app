@@ -467,6 +467,8 @@ $("checkFlightBtn").onclick = async () => {
   openedFlight = fresh;
   fillFlight(fresh);
   applyAircraft(openedAircraft);
+  // The status answer may name the aircraft when the board did not: look it up now.
+  if (!f.aircraft.registration && fresh.aircraft.registration) lookupAircraft(fresh);
   $("checkFlightNote").textContent = `Status checked ${body.fetchedAt ? airportClock(body.fetchedAt) : ""} airport time` + (body.stale ? " (older answer)" : "") + ".";
 };
 
