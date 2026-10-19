@@ -44,6 +44,12 @@ npm run build:photos
 ```
 Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport, reads author and licence from Wikimedia Commons, keeps only public domain / CC0 / CC BY / CC BY-SA photos (no maps or logos, at least 800 px wide), checks that every photo link loads, and writes `public/data/photos/*.json`. Airports with ambiguous Wikidata matches are skipped instead of guessed.
 
+## Refresh the airline logos
+```
+npm run build:logos
+```
+Takes about 2 minutes. Reads each open airline's logo (Wikidata P154) from Wikimedia Commons with the same licence rule as the photos, downloads a small PNG of each into `public/data/logos/`, and writes `public/data/airline-logos.json` and the credits page `public/logo-credits.html`. When several airlines share an IATA code, the page uses a logo only if the flight's airline name or ICAO code picks one; otherwise it shows the coloured code badge.
+
 ## Project layout
 - `public/` — the site Netlify publishes (`index.html`, `styles.css`, `js/`, `data/airports.json`, `data/photos/`)
 - `public/js/airports.js` — airport search, lookup and URL handling

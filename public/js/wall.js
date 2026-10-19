@@ -6,11 +6,11 @@ import { demoFlights } from "./demo-data.js";
 import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, ago } from "./flights.js";
 import { fetchWeather, iconFor, fmtTemp } from "./weather.js";
 import { wallRows, shouldReload, isNight, pageOf, PAGE_MS } from "./wall-model.js";
+import { loadLogos, airlineBadge } from "./logos.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const hue = s => { let h = 0; for (const c of String(s || "?")) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
-const alBadge = f => { const c = f.airline?.iata || f.airline?.icao || (f.number || "").split(" ")[0] || "✈"; return `<span class="al" style="--h:${hue(c)}" aria-hidden="true">${esc(c.slice(0, 3))}</span>`; };
+const alBadge = airlineBadge;
 const fmtClock = (tz, d = new Date(), opts = {}) => new Intl.DateTimeFormat("en-GB", { timeZone: tz || "UTC", hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(d);
 const WEATHER_MS = 15 * 60 * 1000; // weather is free (our cached function)
 
@@ -30,7 +30,8 @@ async function start() {
   $("wExit").href = airportPath(airport);
   tick();
   setInterval(tick, 1000);
-  await Promise.all([loadFlights(), loadWeather()]);
+  await Promise.all([loadFlights(), loadWeather(), loadLogos()]);
+  render();
   // Every minute: statuses that became overdue, the "updated" age, and the hourly reload check.
   setInterval(() => {
     if (document.visibilityState !== "visible") return;
@@ -134,7 +135,7 @@ function render() {
   $("wNotice").textContent = notice;
   $("wFoot").innerHTML = state.kind === "demo"
     ? "Demo flights: sample values, not real data."
-    : `Flights: <a href="https://aerodatabox.com/" target="_blank" rel="noopener">AeroDataBox</a> · Weather: aviationweather.gov, MET Norway (CC BY 4.0) · Times are local at ${esc(airport.iata)}`;
+    : `Flights: <a href="https://aerodatabox.com/" target="_blank" rel="noopener">AeroDataBox</a> · Weather: aviationweather.gov, MET Norway (CC BY 4.0) · Airline logos: Wikimedia Commons (<a href="/logo-credits.html" target="_blank" rel="noopener">credits</a>) · Times are local at ${esc(airport.iata)}`;
 }
 
 // ---------- full screen and keep-awake ----------

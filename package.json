@@ -7,7 +7,8 @@
     "test": "node --test",
     "serve": "node scripts/serve.mjs",
     "build:airports": "node scripts/build-airports.mjs",
-    "build:photos": "node scripts/build-photos.mjs"
+    "build:photos": "node scripts/build-photos.mjs",
+    "build:logos": "node scripts/build-logos.mjs"
   },
   "engines": {
     "node": ">=20"
