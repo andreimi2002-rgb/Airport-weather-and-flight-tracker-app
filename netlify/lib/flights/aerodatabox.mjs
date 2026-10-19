@@ -47,13 +47,22 @@ function movement(m) {
   };
 }
 
+// AeroDataBox licence names -> the short names people know.
+const LICENCE_NAMES = {
+  AttributionCC: "CC BY", AttributionShareAlikeCC: "CC BY-SA", AttributionNoDerivativesCC: "CC BY-ND",
+  AttributionNoncommercialCC: "CC BY-NC", AttributionNoncommercialShareAlikeCC: "CC BY-NC-SA", AttributionNoncommercialNoDerivativesCC: "CC BY-NC-ND",
+  PublicDomainDedicationCC0: "CC0", PublicDomainMark: "Public domain", NoKnownCopyrightRestrictions: "No known copyright restrictions",
+  UnitedStatesGovernmentWork: "US government work", AllRightsReserved: "All rights reserved",
+};
+export const licenceName = l => (str(l) ? LICENCE_NAMES[l] || str(l) : null);
+
 function photoOf(img) {
   if (!img || !str(img.url)) return null;
   return {
     url: img.url,
     pageUrl: str(img.webUrl),
     author: str(img.author),
-    licence: str(img.license),
+    licence: licenceName(img.license),
     attribution: Array.isArray(img.htmlAttributions) ? img.htmlAttributions.filter(s => typeof s === "string") : [],
     kind: "representative",
   };

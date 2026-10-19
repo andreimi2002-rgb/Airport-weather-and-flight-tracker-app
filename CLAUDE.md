@@ -53,6 +53,8 @@ Implement items 1–3 with the design preserved, run checks, test airport switch
 
 Later (not now): installable PWA polish, alerts, Explorer layer, native widget, public launch licensing review.
 
+In review: item 5 (branch `feature/flight-detail`): `/api/aircraft/<REG>` (1 unit, stored 7 days) and `/api/flight-status/<NUMBER>/<DATE>/<IATA>` (2 units, 5 min) in `netlify/functions/flight-details.mjs`; budget now in units (`netlify/lib/flights/budget.mjs`, cap 360, env `FLIGHTS_MONTHLY_UNIT_CAP`). Manufacturer only from a known name at the start of the provider's type name. "No recent update" now also requires no provider update after the expected time (`updatedAt`).
+
 **Agreed order from here (2026-10-19), details in `docs/roadmap.md`:** item 5 (flight detail) → missing-photos rule (Austin, Aalborg, Bergen, Timișoara) → clickable weather panel → stages A–E toward FlightAware (flight pages and search, aircraft pages, live map, alerts/PWA, statistics) → item 6 last (owner's choice; the phone table fix can be pulled forward on request). Long-term goal: FlightAware-level features with the current design. Ask the owner before reordering.
 
 ## Progress and decisions (keep this updated after each item)

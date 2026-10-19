@@ -49,11 +49,14 @@ export const isDone = f => (f.direction === "departure" ? ["departed", "en-route
 // we then say "No recent update" rather than keep showing "Expected".
 export const OVERDUE_MIN = 15;
 const FINAL = ["cancelled", "maybe-cancelled", "diverted"];
+// A provider update after that time (updatedAt) means the status is current.
 export function isOverdue(f, now = Date.now()) {
   if (isDone(f) || FINAL.includes(f.status)) return false;
   const m = f.direction === "departure" ? f.departure : f.arrival;
   const t = Date.parse((m.revised || m.scheduled)?.utc);
-  return Number.isFinite(t) && now - t > OVERDUE_MIN * 60000;
+  if (!Number.isFinite(t) || now - t <= OVERDUE_MIN * 60000) return false;
+  const updated = Date.parse(String(f.updatedAt || "").replace(" ", "T"));
+  return !(Number.isFinite(updated) && updated > t);
 }
 
 export function boardStats(flights) {

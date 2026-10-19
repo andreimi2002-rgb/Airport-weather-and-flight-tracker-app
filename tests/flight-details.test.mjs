@@ -148,3 +148,29 @@ test("function: routes and input checks", async () => {
     if (saved !== undefined) process.env.AERODATABOX_RAPIDAPI_KEY = saved;
   }
 });
+
+test("a provider update after the expected time keeps its status (not 'No recent update')", async () => {
+  const { isOverdue } = await import("../public/js/flight-model.js");
+  const f = { direction: "departure", status: "boarding", departure: { scheduled: { utc: "2026-10-19T13:30Z" }, revised: { utc: "2026-10-19T13:55Z" } }, updatedAt: null };
+  const at = Date.parse("2026-10-19T14:20:00Z");
+  assert.equal(isOverdue(f, at), true, "no update at all");
+  assert.equal(isOverdue({ ...f, updatedAt: "2026-10-19 12:40Z" }, at), true, "last update before the expected time");
+  assert.equal(isOverdue({ ...f, updatedAt: "2026-10-19 14:15Z" }, at), false, "updated after the expected time");
+});
+
+test("provider licence names are shown the way people know them", async () => {
+  const { licenceName } = await import("../netlify/lib/flights/aerodatabox.mjs");
+  assert.equal(licenceName("AttributionShareAlikeCC"), "CC BY-SA");
+  assert.equal(licenceName("PublicDomainDedicationCC0"), "CC0");
+  assert.equal(licenceName("SomethingNew"), "SomethingNew");
+  assert.equal(licenceName(null), null);
+  assert.equal(normalizeAircraft(AIRCRAFT).photo.licence, "CC BY");
+});
+
+test("a late flight that is already boarding says Boarding, not Delayed", async () => {
+  const { statusView } = await import("../public/js/flights.js");
+  const base = { direction: "departure", delayMinutes: 25, departure: { scheduled: { utc: "2026-10-19T13:30Z" }, revised: { utc: "2026-10-19T13:55Z" } }, updatedAt: "2026-10-19 13:50Z" };
+  const at = Date.parse("2026-10-19T13:50:00Z");
+  assert.deepEqual(statusView({ ...base, status: "boarding" }, at), { label: "Boarding", cls: "boarding" });
+  assert.deepEqual(statusView({ ...base, status: "expected" }, at), { label: "Delayed", cls: "delayed" });
+});

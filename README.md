@@ -11,7 +11,7 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 - Airport and city photos from Wikimedia Commons for about half of all airports (most large airports), each with author, licence and a link to the original. Airports without a freely licensed photo show a styled panel. A photo that fails to load also falls back to that panel.
 - Live weather for every airport: the latest METAR (decoded into wind, visibility, ceiling, conditions and a plain-English reading) and TAF from aviationweather.gov, and a forecast for the next hours from MET Norway. Airports without a reporting METAR station say so and show only the forecast, labelled as a forecast. The weather refreshes every 10 minutes while the page is open; if a refresh fails, the last data stays visible with a warning and its time. METARs older than 90 minutes are flagged.
 
-- Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies (registration, distance, scheduled flight time, a representative aircraft photo with credit); everything else says "Not available". "Last updated" shows when the board was fetched; old data is labelled.
+- Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies; everything else says "Not available". When the registration is known, opening a flight looks up that aircraft (exact model, manufacturer, age, seats, engines, delivery date, operator, and a photo of that aircraft labelled "matched automatically"). A "Check this flight" button asks for the current status of that one flight. Flights whose time passed without any provider update say "No recent update". "Last updated" shows when the board was fetched; old data is labelled.
 
 ## Still demo data (clearly labelled in the app)
 - Flights, only while no AeroDataBox key is set: sample board for SEA. Other airports say flight data is not connected yet.
@@ -49,6 +49,9 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `netlify/functions/weather.mjs` — the `/api/weather/<IATA>` function: input check, airport lookup, cache headers, rate limit
 - `netlify/lib/weather.mjs` — calls the weather providers and decodes their answers
 - `netlify/functions/flights.mjs` — the `/api/flights/<IATA>` function
+- `netlify/functions/flight-details.mjs` — `/api/aircraft/<REG>` and `/api/flight-status/<NUMBER>/<DATE>/<IATA>`
+- `netlify/lib/flights/details.mjs` — aircraft lookup (stored 7 days) and flight status (stored 5 min)
+- `netlify/lib/flights/budget.mjs` — the shared monthly unit budget
 - `netlify/lib/flights/aerodatabox.mjs` — AeroDataBox adapter (provider answer → Flight model)
 - `netlify/lib/flights/board.mjs` — stored boards, monthly budget, stale and quota states
 - `netlify/lib/airports.mjs` — airport lookup shared by the functions
@@ -80,7 +83,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 
 The Basic plan has 400 units (about 200 boards) a month, so:
 - each airport's board is stored in Netlify Blobs and reused for 25 minutes (and cached on the CDN);
-- a monthly budget (default 180 calls, change with `FLIGHTS_MONTHLY_CALL_CAP`) stops calls before the provider's limit; a "monthly quota" 429 from RapidAPI also stops them until next month. A per-second "Too many requests" 429 is treated as temporary;
+- a monthly budget in provider units (board 2, aircraft 1, flight status 2; default 360 of the plan's 400, change with `FLIGHTS_MONTHLY_UNIT_CAP`) stops calls before the provider's limit; a "monthly quota" 429 from RapidAPI also stops them until next month. A per-second "Too many requests" 429 is treated as temporary;
 - when no new call is possible, the last stored board is shown, marked as old.
 
 Time zones are matched by ICAO/IATA code. When the two disagree or no match exists (mostly small airfields), the time zone is left empty rather than guessed.
