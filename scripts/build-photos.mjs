@@ -131,11 +131,14 @@ const airports = data.airports.map(r => ({ iata: r[f.iata], icao: r[f.icao], cit
 console.log("Querying Wikidata…");
 // Every photo statement (not only the "best" one wdt:P18 returns), with its
 // rank so preferred photos are tried first; deprecated ones are skipped.
-const itemRows = await sparql("SELECT ?a ?iata ?icao ?img ?rank WHERE { ?a wdt:P238 ?iata . OPTIONAL { ?a wdt:P239 ?icao } OPTIONAL { ?a p:P18 ?st . ?st ps:P18 ?img ; wikibase:rank ?rank . FILTER(?rank != wikibase:DeprecatedRank) } }");
+// closed: dissolved (P576), closure date (P3999) or end time (P582); base: a military air base (Q695850).
+const itemRows = await sparql("SELECT ?a ?iata ?icao ?img ?rank ?closed ?base WHERE { ?a wdt:P238 ?iata . OPTIONAL { ?a wdt:P239 ?icao } OPTIONAL { ?a p:P18 ?st . ?st ps:P18 ?img ; wikibase:rank ?rank . FILTER(?rank != wikibase:DeprecatedRank) } BIND(EXISTS { ?a wdt:P576|wdt:P3999|wdt:P582 [] } AS ?closed) BIND(EXISTS { ?a wdt:P31 wd:Q695850 } AS ?base) }");
 // "Place served" that has a population: a city/town, not a railway station.
 const cityRows = await sparql('SELECT ?a ?city ?cityLabel ?cimg ?crank WHERE { ?a wdt:P238 [] ; wdt:P931 ?city . FILTER EXISTS { ?city wdt:P1082 [] } OPTIONAL { ?city p:P18 ?cst . ?cst ps:P18 ?cimg ; wikibase:rank ?crank . FILTER(?crank != wikibase:DeprecatedRank) } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }');
+// Each served city's population (to pick a clearly dominant city) and Wikivoyage banner (a last photo).
+const cityFacts = await sparql("SELECT ?city (MAX(?p) AS ?pop) (SAMPLE(?b) AS ?cbanner) WHERE { ?a wdt:P238 [] ; wdt:P931 ?city . OPTIONAL { ?city wdt:P1082 ?p } OPTIONAL { ?city wdt:P948 ?b } } GROUP BY ?city");
 const byIata = groupAirportItems(itemRows);
-const citiesByAirport = groupCities(cityRows);
+const citiesByAirport = groupCities(cityRows, cityFacts);
 
 const matches = new Map();
 const files = new Set();

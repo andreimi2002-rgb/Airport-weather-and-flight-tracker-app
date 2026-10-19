@@ -174,6 +174,8 @@ async function renderPhotos(a) {
   if (current !== a) return;
   const cityName = p.city?.name || a.city;
   $("cityPhotoTitle").textContent = cityName || "City not listed";
+  // Wikidata sometimes lists a county, province or metro area as the place served: say "area", not "city".
+  $("cityKind").textContent = /\b(county|district|province|prefecture|governorate|department|oblast|region|regency|metropolitan|metroplex|area)\b/i.test(cityName || "") ? "THE AREA" : "THE CITY";
   setHeroPhoto(p.airport, a);
   // No airport photo: the city photo is still shown in its own card.
   setCityPhoto(p.city?.photo, "Photo of " + cityName, a.iata, cityName ? "No freely licensed photo found" : "");
