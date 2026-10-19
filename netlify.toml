@@ -22,3 +22,9 @@
   from = "/aircraft/*"
   to = "/aircraft.html"
   status = 200
+
+# Wall board for a monitor or tablet, e.g. /board/OTP.
+[[redirects]]
+  from = "/board/*"
+  to = "/board.html"
+  status = 200

@@ -79,7 +79,8 @@ function route() {
   if (!index) return;
   const r = parseRoute(location.pathname);
   if (r.invalid) return notFound(r.code);
-  const code = r.code || store.get("last", DEFAULT_AIRPORT);
+  // The start page opens the home airport, else the last one viewed.
+  const code = r.code || store.get("home", null) || store.get("last", DEFAULT_AIRPORT);
   const a = findAirport(index, code) || (!r.code && findAirport(index, DEFAULT_AIRPORT));
   if (!a) return notFound(code);
   if (location.pathname !== airportPath(a)) history.replaceState(null, "", airportPath(a) + location.search);
@@ -120,6 +121,7 @@ function showAirport(a) {
   $("airportChips").innerHTML = chips.map(([k, v]) => `<div class="chip"><small>${k}</small><strong class="${v == null ? "unknown" : ""}">${esc(v ?? "Not listed")}</strong></div>`).join("");
   updateFavorite();
   renderQuick();
+  $("wallLink").href = "/board/" + a.iata;
   renderPhotos(a);
   renderWeather(a);
   updateClock();
@@ -131,8 +133,10 @@ function renderQuick() {
   if (!index) return;
   const saved = favorites().map(c => index.byIata.get(c)).filter(Boolean);
   const list = saved.length ? saved : demoAirportCodes.map(c => index.byIata.get(c)).filter(Boolean);
+  const homeAp = index.byIata.get(store.get("home", null));
+  if (homeAp && !list.includes(homeAp)) list.unshift(homeAp);
   if (current && !list.includes(current)) list.unshift(current);
-  $("quickNav").innerHTML = list.map(a => `<a class="qchip${a === current ? " active" : ""}" href="${airportPath(a)}" data-code="${a.iata}" title="${esc(a.name)}">${isFavorite(a) ? '<span style="color:var(--amber)">★</span>' : ""}<b>${a.iata}</b><span class="qt">${a.tz ? fmtClock(a.tz) : ""}</span></a>`).join("");
+  $("quickNav").innerHTML = list.map(a => `<a class="qchip${a === current ? " active" : ""}" href="${airportPath(a)}" data-code="${a.iata}" title="${esc(a.name)}${a === homeAp ? " (home)" : ""}">${a === homeAp ? '<span aria-label="home">⌂</span>' : ""}${isFavorite(a) ? '<span style="color:var(--amber)">★</span>' : ""}<b>${a.iata}</b><span class="qt">${a.tz ? fmtClock(a.tz) : ""}</span></a>`).join("");
 }
 $("quickNav").addEventListener("click", e => {
   const a = e.target.closest("[data-code]");
@@ -874,6 +878,11 @@ function updateFavorite() {
   $("favoriteBtn").setAttribute("aria-pressed", on);
   $("favoriteBtn").title = on ? "Remove from saved airports" : "Save airport";
   $("favoriteBtn").querySelector(".fav-text").textContent = on ? "Saved" : "Save";
+  const home = !!current && store.get("home", null) === current.iata;
+  $("homeBtn").classList.toggle("active", home);
+  $("homeBtn").setAttribute("aria-pressed", home);
+  $("homeBtn").title = home ? "Your home airport: opens when Airport Live starts (click to unset)" : "Open this airport when Airport Live starts";
+  $("homeBtn").querySelector(".fav-text").textContent = home ? "Home airport" : "Home";
 }
 
 // ---------- events ----------
@@ -905,6 +914,14 @@ $("airportOptions").addEventListener("click", e => {
   const btn = e.target.closest("[data-i]");
   if (btn) choose(pickerResults[Number(btn.dataset.i)]);
 });
+$("homeBtn").onclick = () => {
+  if (!current) return;
+  const on = store.get("home", null) !== current.iata;
+  store.set("home", on ? current.iata : null);
+  updateFavorite();
+  renderQuick();
+  showToast(on ? current.iata + " is your home airport: it opens when you start Airport Live" : "Home airport removed");
+};
 $("favoriteBtn").onclick = () => {
   if (!current) return;
   const list = favorites();

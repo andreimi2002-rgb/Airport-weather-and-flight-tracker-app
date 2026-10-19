@@ -38,7 +38,7 @@
         <div class="chips" id="airportChips"></div>
       </div>
       <div class="hero-side">
-        <button class="favorite" id="favoriteBtn" title="Save airport" aria-label="Save airport" aria-pressed="false"><span aria-hidden="true">★</span><span class="fav-text">Save</span></button>
+        <div class="hero-btns"><button class="favorite" id="homeBtn" title="Open this airport when Airport Live starts" aria-label="Make this my home airport" aria-pressed="false"><span aria-hidden="true">⌂</span><span class="fav-text">Home</span></button><button class="favorite" id="favoriteBtn" title="Save airport" aria-label="Save airport" aria-pressed="false"><span aria-hidden="true">★</span><span class="fav-text">Save</span></button></div>
         <div class="clock" aria-live="off"><small>LOCAL TIME</small><div class="clock-time"><span id="localTime">—</span><span class="clock-sec" id="localSec"></span></div><div class="clock-date" id="localDate"></div><div class="clock-utc" id="utcTime"></div></div>
       </div>
     </div>
@@ -70,7 +70,7 @@
   </section>
 
   <!-- Board + side -->
-  <div class="section-head"><div><h2>Flight board</h2><div class="section-note" id="boardNote">Select any flight to open its details.</div></div><div class="eyebrow badge" id="flightsBadge">FLIGHTS</div></div>
+  <div class="section-head"><div><h2>Flight board</h2><div class="section-note" id="boardNote">Select any flight to open its details.</div></div><div class="board-head-actions"><a class="ghost" id="wallLink" href="/board/SEA" title="A clean one-screen board for a monitor or tablet">⤢ Wall board</a><div class="eyebrow badge" id="flightsBadge">FLIGHTS</div></div></div>
   <div class="board-layout">
     <section class="board">
       <div class="board-toolbar">
