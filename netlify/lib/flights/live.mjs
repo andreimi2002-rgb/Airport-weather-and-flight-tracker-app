@@ -60,6 +60,7 @@ export function normalizeAdsb(ac, now) {
     onGround,
     altitudeFt: onGround ? null : num(ac.alt_baro),
     groundSpeedKt: num(ac.gs) !== null ? Math.round(ac.gs) : null,
+    verticalRateFpm: onGround ? null : (num(ac.baro_rate) ?? num(ac.geom_rate)),
     seenAt: new Date(now - (seen ?? 0) * 1000).toISOString(),
   };
 }

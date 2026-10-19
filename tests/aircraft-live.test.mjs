@@ -248,3 +248,15 @@ test("type check: a swap within the family is fine, another family is a conflict
   assert.equal(typeDiffers("A320", "Airbus A320"), false);
   assert.equal(typeConflicts("ZZZZ", "Airbus A320"), false, "unknown code: no conflict claimed");
 });
+
+test("live fields say altitude, speed and climb in plain words", async () => {
+  const { liveFields } = await import("../public/js/flights.js");
+  assert.deepEqual(liveFields({ onGround: false, altitudeFt: 10475, groundSpeedKt: 271, verticalRateFpm: 1216 }),
+    [["ALTITUDE", "10,475 ft · 3,193 m"], ["GROUND SPEED", "271 kt · 502 km/h"], ["VERTICAL", "Climbing 1,200 ft/min"]]);
+  assert.equal(liveFields({ onGround: false, altitudeFt: 37000, groundSpeedKt: 450, verticalRateFpm: 0 })[0][1], "37,000 ft · 11,278 m (FL370)");
+  assert.equal(liveFields({ onGround: false, altitudeFt: 37000, groundSpeedKt: 450, verticalRateFpm: 64 })[2][1], "Level");
+  assert.equal(liveFields({ onGround: false, altitudeFt: 1175, groundSpeedKt: 128, verticalRateFpm: -576 })[2][1], "Descending 600 ft/min");
+  assert.equal(liveFields({ onGround: true, altitudeFt: null, groundSpeedKt: 7, verticalRateFpm: null })[0][1], "On the ground");
+  const { normalizeAdsb } = await import("../netlify/lib/flights/live.mjs");
+  assert.equal(normalizeAdsb({ flight: "X", r: "Y", alt_baro: 23750, gs: 420.6, baro_rate: 1216 }, NOW).verticalRateFpm, 1216);
+});

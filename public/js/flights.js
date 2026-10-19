@@ -173,3 +173,16 @@ export function typeDiffers(typeCode, boardModel) {
   const n = /(\d+)/.exec(String(boardModel || ""));
   return !!fam && !!n && fam !== Number(n[1]) && !typeConflicts(typeCode, boardModel);
 }
+
+// Labelled live values for the drawer: altitude, ground speed, vertical, as people read them.
+export function liveFields(ac) {
+  if (!ac) return [];
+  const NA = "Not available";
+  const alt = ac.onGround ? "On the ground"
+    : ac.altitudeFt === null || ac.altitudeFt === undefined ? NA
+    : `${ac.altitudeFt.toLocaleString("en-US")} ft · ${Math.round(ac.altitudeFt * 0.3048).toLocaleString("en-US")} m` + (ac.altitudeFt >= 18000 ? ` (FL${String(Math.round(ac.altitudeFt / 100)).padStart(3, "0")})` : "");
+  const spd = ac.groundSpeedKt === null || ac.groundSpeedKt === undefined ? NA : `${ac.groundSpeedKt} kt · ${Math.round(ac.groundSpeedKt * 1.852)} km/h`;
+  const vr = ac.verticalRateFpm;
+  const vert = ac.onGround ? "—" : vr === null || vr === undefined ? NA : Math.abs(vr) < 300 ? "Level" : `${vr > 0 ? "Climbing" : "Descending"} ${Math.abs(Math.round(vr / 50) * 50).toLocaleString("en-US")} ft/min`;
+  return [["ALTITUDE", alt], ["GROUND SPEED", spd], ["VERTICAL", vert]];
+}

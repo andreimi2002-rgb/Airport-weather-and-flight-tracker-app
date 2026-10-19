@@ -451,3 +451,8 @@ kbd,.kbd-btn{font-family:var(--mono);font-size:11px;border:1px solid var(--line2
   .fav-text{display:none}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.fd-sub{margin-top:14px}
+.fd-sub h4{margin:0 0 8px;font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;display:flex;justify-content:space-between;gap:10px}
+.fd-sub h4 small{font-size:11px;letter-spacing:0;text-transform:none;font-weight:500;font-family:var(--mono)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(max-width:760px){.grid3{grid-template-columns:1fr}}

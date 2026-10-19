@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveLine } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -598,7 +598,7 @@ function renderFlightDrawer() {
     <div class="fd-sec"><h3>Aircraft <small>${esc(fd.aircraftNote)}</small></h3>
       <div class="ac"><div class="plane-photo${photoHtml ? "" : " no-photo"}">${photoHtml}<span class="photo-note">${noteHtml}</span></div>
       <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", fd.reg || f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
-      ${fd.live ? `<div class="note">Live ADS-B: <b>${esc(liveLine(fd.live))}</b> · ${esc(fd.live.callsign || "")} · seen ${esc(relative(fd.live.seenAt))} · data: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL)</div>` : ""}
+      ${fd.live ? `<div class="fd-sub"><h4>Live now <small>${esc(fd.live.callsign || "")} · seen ${esc(relative(fd.live.seenAt))}</small></h4><div class="grid3">${liveFields(fd.live).map(([k, v]) => fieldHtml(k, v)).join("")}</div><div class="note">Live ADS-B data: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL).</div></div>` : ""}
     </div>
 
     <div class="fd-sec"><h3>Timeline</h3><ol class="timeline">${ms.map(x => `<li class="${x.key === "x" ? "bad" : x.done ? "done" : ""}">${esc(x.label)}${x.time ? ` · <span class="tl-t">${esc(hhmm(x.time))}</span><span class="tl-k">${x.kind}</span>` : ""}</li>`).join("")}</ol></div>
