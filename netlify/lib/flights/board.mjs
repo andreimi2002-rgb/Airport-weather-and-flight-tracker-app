@@ -58,7 +58,7 @@ export async function getBoard(airport, { key, store, now = Date.now(), fetchImp
   }
 
   try {
-    const { board, usage: headers } = await fetchBoard(airport.iata, key, { fetchImpl });
+    const { board, usage: headers } = await fetchBoard(airport, key, { fetchImpl });
     usage.calls += 1;
     usage.lastHeaders = headers;
     usage.lastCallAt = new Date(now).toISOString();

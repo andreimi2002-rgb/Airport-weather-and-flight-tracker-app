@@ -57,6 +57,19 @@ test("normalizes AeroDataBox flights without inventing fields", () => {
   assert.equal(isDone(arr), true);
 });
 
+test("fills in the requested airport when the provider leaves it out", () => {
+  const raw = structuredClone(SAMPLE);
+  delete raw.arrivals[0].arrival.airport;           // as seen in real answers for OTP arrivals
+  raw.departures[0].departure.airport = {};
+  const here = { iata: "OTP", icao: "LROP", name: "Bucharest Henri Coandă International Airport", city: "Otopeni", country: null };
+  const b = normalizeBoard(raw, here);
+  assert.equal(b.arrivals[0].arrival.airport.iata, "OTP");
+  assert.equal(b.arrivals[0].arrival.airport.city, "Otopeni");
+  assert.equal(b.departures.find(f => f.number === "TEST 391").departure.airport.icao, "LROP");
+  // The other end is never filled in from our side.
+  assert.equal(b.arrivals[0].departure.airport.iata, "FRA");
+});
+
 test("board statistics", () => {
   const b = normalizeBoard(SAMPLE);
   const all = [...b.departures, ...b.arrivals];
@@ -68,7 +81,7 @@ test("board statistics", () => {
 
 test("calls the provider with the key in a header and the 12-hour window", async () => {
   const f = fakeFetch(ok(SAMPLE));
-  const { board, usage } = await fetchBoard("OTP", "secret-key", { fetchImpl: f });
+  const { board, usage } = await fetchBoard({ iata: "OTP", icao: "LROP", name: "Bucharest", city: "Otopeni" }, "secret-key", { fetchImpl: f });
   assert.equal(board.departures.length, 3);
   assert.equal(usage["x-ratelimit-requests-remaining"], "199");
   const { url, opts } = f.calls[0];

@@ -333,13 +333,16 @@ function openFlight(f, opener) {
     toCode: f.arrival.airport.iata || "—", toCity: placeName(f.arrival.airport),
     detailStatusText: st.label, detailAircraft: f.aircraft.model || NA, detailManufacturer: f.aircraft.manufacturer || NA,
     detailFlightNo: f.number, detailAirline: f.airline.name || NA,
-    detailGate: [h.terminal && "Terminal " + h.terminal, h.gate && "Gate " + h.gate].filter(Boolean).join(" · ") || NA,
+    detailGate: [h.terminal && "Terminal " + h.terminal, h.gate && "Gate " + h.gate, f.direction === "arrival" && h.baggageBelt && "Belt " + h.baggageBelt].filter(Boolean).join(" · ") || NA,
   });
   $("detailEyebrow").textContent = f.demo ? "FLIGHT DETAILS · DEMO DATA" : "FLIGHT DETAILS · AERODATABOX";
   $("detailStatus").textContent = st.label;
   $("detailStatus").className = "status " + st.cls;
+  // The other end of the route, worded neutrally: we only know what the provider sent.
   const otherEnd = other(f), otherTime = otherEnd.revised || otherEnd.scheduled;
-  $("detailTiming").textContent = `Scheduled ${hhmm(h.scheduled)} · ${up.note} ${up.time} · local airport time` + (otherTime && !f.demo ? ` · ${f.direction === "departure" ? "Arrives" : "Departed"} ${hhmm(otherTime)} local time at ${otherEnd.airport.iata || placeName(otherEnd.airport)}` : "");
+  const otherKind = otherEnd.revised ? "estimated or actual" : "scheduled";
+  const otherWhere = otherEnd.airport.iata || placeName(otherEnd.airport);
+  $("detailTiming").textContent = `Scheduled ${hhmm(h.scheduled)} · ${up.note} ${up.time} · local airport time` + (otherTime && !f.demo ? ` · ${f.direction === "departure" ? "Arrival at" : "Departure from"} ${otherWhere}: ${hhmm(otherTime)} local time (${otherKind})` : "");
   const dur = fmtDuration(f.scheduledDurationMinutes);
   $("detailNote").textContent = [
     `Registration: ${f.aircraft.registration || NA}`,

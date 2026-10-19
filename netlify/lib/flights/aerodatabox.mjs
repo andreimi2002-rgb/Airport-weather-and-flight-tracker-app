@@ -59,8 +59,12 @@ function photo(img) {
   };
 }
 
-export function normalizeFlight(raw, direction) {
+// The provider may leave out the airport we asked about (it is the same for
+// every flight); fill it from our own airport list. hereAirport: AirportRef.
+export function normalizeFlight(raw, direction, hereAirport = null) {
   const departure = movement(raw.departure), arrival = movement(raw.arrival);
+  const own = direction === "departure" ? departure : arrival;
+  if (hereAirport && !own.airport.iata && !own.airport.icao && !own.airport.name) own.airport = { ...hereAirport };
   const here = direction === "departure" ? departure : arrival;
   const number = str(raw.number) || "—";
   return {
@@ -83,9 +87,9 @@ export function normalizeFlight(raw, direction) {
 
 const byScheduled = dir => (a, b) => String(a[dir].scheduled?.utc || "").localeCompare(String(b[dir].scheduled?.utc || ""));
 
-export function normalizeBoard(json) {
-  const departures = (Array.isArray(json?.departures) ? json.departures : []).map(f => normalizeFlight(f, "departure")).sort(byScheduled("departure"));
-  const arrivals = (Array.isArray(json?.arrivals) ? json.arrivals : []).map(f => normalizeFlight(f, "arrival")).sort(byScheduled("arrival"));
+export function normalizeBoard(json, hereAirport = null) {
+  const departures = (Array.isArray(json?.departures) ? json.departures : []).map(f => normalizeFlight(f, "departure", hereAirport)).sort(byScheduled("departure"));
+  const arrivals = (Array.isArray(json?.arrivals) ? json.arrivals : []).map(f => normalizeFlight(f, "arrival", hereAirport)).sort(byScheduled("arrival"));
   const all = [...departures.map(f => f.departure), ...arrivals.map(f => f.arrival)];
   return { departures, arrivals, live: all.some(m => m.live) };
 }
@@ -94,8 +98,11 @@ export class ProviderError extends Error {
   constructor(message, { status = null, quota = false } = {}) { super(message); this.status = status; this.quota = quota; }
 }
 
+// airport: { iata, icao, name, city, country? } from our list.
 // Returns { board, usage } or throws ProviderError.
-export async function fetchBoard(iata, key, { fetchImpl = fetch } = {}) {
+export async function fetchBoard(airport, key, { fetchImpl = fetch } = {}) {
+  const iata = airport.iata;
+  const hereAirport = { iata, icao: airport.icao || null, name: airport.name || null, city: airport.city || null, country: airport.country || null };
   const q = new URLSearchParams({
     offsetMinutes: WINDOW.offsetMinutes, durationMinutes: WINDOW.durationMinutes, direction: "Both",
     withLeg: "true", withCancelled: "true", withCodeshared: "false", withCargo: "false", withPrivate: "false", withLocation: "false",
@@ -122,7 +129,7 @@ export async function fetchBoard(iata, key, { fetchImpl = fetch } = {}) {
   if (!res.ok) throw new ProviderError(`The flight data service answered HTTP ${res.status}.`, { status: res.status });
   let json;
   try { json = await res.json(); } catch { throw new ProviderError("The flight data service sent an unreadable answer."); }
-  return { board: normalizeBoard(json), usage };
+  return { board: normalizeBoard(json, hereAirport), usage };
 }
 
 // RapidAPI reports the remaining quota in x-ratelimit-* headers (names vary by plan).
