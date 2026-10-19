@@ -11,12 +11,17 @@ const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css", ".js": 
 
 createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  // /api/weather/OTP and /api/flights/OTP run the same code as the Netlify
-  // Functions (no CDN cache here; flights keep their budget in memory).
-  const api = /^\/api\/(weather|flights)\/([^/]+)$/.exec(path);
-  if (api) {
-    const { default: fn } = await import(`../netlify/functions/${api[1]}.mjs`);
-    const r = await fn(new Request("http://localhost" + req.url), { params: { code: api[2] } });
+  // The /api/ routes run the same code as the Netlify Functions (no CDN
+  // cache here; flight data keeps its budget in memory).
+  const routes = [
+    [/^\/api\/(weather|flights)\/([^/]+)$/, m => [m[1], { code: m[2] }]],
+    [/^\/api\/aircraft\/([^/]+)$/, m => ["flight-details", { reg: m[1] }]],
+    [/^\/api\/flight-status\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2], code: m[3] }]],
+  ];
+  const hit = routes.map(([re, to]) => { const m = re.exec(path); return m && to(m); }).find(Boolean);
+  if (hit) {
+    const { default: fn } = await import(`../netlify/functions/${hit[0]}.mjs`);
+    const r = await fn(new Request("http://localhost" + req.url), { params: hit[1] });
     res.writeHead(r.status, Object.fromEntries(r.headers)).end(Buffer.from(await r.arrayBuffer()));
     return;
   }

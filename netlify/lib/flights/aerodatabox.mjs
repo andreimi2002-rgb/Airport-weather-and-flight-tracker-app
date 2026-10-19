@@ -47,13 +47,22 @@ function movement(m) {
   };
 }
 
-function photo(img) {
+// AeroDataBox licence names -> the short names people know.
+const LICENCE_NAMES = {
+  AttributionCC: "CC BY", AttributionShareAlikeCC: "CC BY-SA", AttributionNoDerivativesCC: "CC BY-ND",
+  AttributionNoncommercialCC: "CC BY-NC", AttributionNoncommercialShareAlikeCC: "CC BY-NC-SA", AttributionNoncommercialNoDerivativesCC: "CC BY-NC-ND",
+  PublicDomainDedicationCC0: "CC0", PublicDomainMark: "Public domain", NoKnownCopyrightRestrictions: "No known copyright restrictions",
+  UnitedStatesGovernmentWork: "US government work", AllRightsReserved: "All rights reserved",
+};
+export const licenceName = l => (str(l) ? LICENCE_NAMES[l] || str(l) : null);
+
+function photoOf(img) {
   if (!img || !str(img.url)) return null;
   return {
     url: img.url,
     pageUrl: str(img.webUrl),
     author: str(img.author),
-    licence: str(img.license),
+    licence: licenceName(img.license),
     attribution: Array.isArray(img.htmlAttributions) ? img.htmlAttributions.filter(s => typeof s === "string") : [],
     kind: "representative",
   };
@@ -80,7 +89,7 @@ export function normalizeFlight(raw, direction, hereAirport = null) {
     distanceKm: typeof raw.greatCircleDistance?.km === "number" ? Math.round(raw.greatCircleDistance.km) : null,
     scheduledDurationMinutes: departure.scheduled && arrival.scheduled ? minutesBetween(departure.scheduled, arrival.scheduled) : null,
     isCargo: raw.isCargo === true,
-    aircraft: { registration: str(raw.aircraft?.reg), model: str(raw.aircraft?.model), modeS: str(raw.aircraft?.modeS), photo: photo(raw.aircraft?.image) },
+    aircraft: { registration: str(raw.aircraft?.reg), model: str(raw.aircraft?.model), modeS: str(raw.aircraft?.modeS), photo: photoOf(raw.aircraft?.image) },
     updatedAt: str(raw.lastUpdatedUtc),
   };
 }
@@ -98,18 +107,11 @@ export class ProviderError extends Error {
   constructor(message, { status = null, quota = false } = {}) { super(message); this.status = status; this.quota = quota; }
 }
 
-// airport: { iata, icao, name, city, country? } from our list.
-// Returns { board, usage } or throws ProviderError.
-export async function fetchBoard(airport, key, { fetchImpl = fetch } = {}) {
-  const iata = airport.iata;
-  const hereAirport = { iata, icao: airport.icao || null, name: airport.name || null, city: airport.city || null, country: airport.country || null };
-  const q = new URLSearchParams({
-    offsetMinutes: WINDOW.offsetMinutes, durationMinutes: WINDOW.durationMinutes, direction: "Both",
-    withLeg: "true", withCancelled: "true", withCodeshared: "false", withCargo: "false", withPrivate: "false", withLocation: "false",
-  });
+// One provider request. Returns { status: 200|204, json, usage } or throws ProviderError.
+async function request(path, key, fetchImpl) {
   let res;
   try {
-    res = await fetchImpl(`https://${HOST}/flights/airports/iata/${iata}?${q}`, {
+    res = await fetchImpl(`https://${HOST}${path}`, {
       headers: { "X-RapidAPI-Key": key, "X-RapidAPI-Host": HOST, Accept: "application/json" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -117,7 +119,7 @@ export async function fetchBoard(airport, key, { fetchImpl = fetch } = {}) {
     throw new ProviderError(err.name === "TimeoutError" ? "The flight data service did not answer in time." : "Couldn't reach the flight data service.");
   }
   const usage = rateHeaders(res.headers);
-  if (res.status === 204) return { board: { departures: [], arrivals: [], live: false }, usage };
+  if (res.status === 204) return { status: 204, json: null, usage };
   if (res.status === 429) {
     // RapidAPI answers 429 both for the monthly quota and for the per-second
     // limit ("Too many requests"). Only the first stops calls for the month.
@@ -129,7 +131,74 @@ export async function fetchBoard(airport, key, { fetchImpl = fetch } = {}) {
   if (!res.ok) throw new ProviderError(`The flight data service answered HTTP ${res.status}.`, { status: res.status });
   let json;
   try { json = await res.json(); } catch { throw new ProviderError("The flight data service sent an unreadable answer."); }
+  return { status: 200, json, usage };
+}
+
+// airport: { iata, icao, name, city, country? } from our list.
+// Returns { board, usage } or throws ProviderError.
+export async function fetchBoard(airport, key, { fetchImpl = fetch } = {}) {
+  const iata = airport.iata;
+  const hereAirport = { iata, icao: airport.icao || null, name: airport.name || null, city: airport.city || null, country: airport.country || null };
+  const q = new URLSearchParams({
+    offsetMinutes: WINDOW.offsetMinutes, durationMinutes: WINDOW.durationMinutes, direction: "Both",
+    withLeg: "true", withCancelled: "true", withCodeshared: "false", withCargo: "false", withPrivate: "false", withLocation: "false",
+  });
+  const { json, usage } = await request(`/flights/airports/iata/${iata}?${q}`, key, fetchImpl);
+  if (!json) return { board: { departures: [], arrivals: [], live: false }, usage };
   return { board: normalizeBoard(json, hereAirport), usage };
+}
+
+// ---------- aircraft (Tier 1, 1 unit) ----------
+// AeroDataBox has no manufacturer field. It is taken from the start of the
+// provider's type name only when that is a known manufacturer; otherwise null.
+const MANUFACTURERS = ["Airbus", "Boeing", "Embraer", "ATR", "Bombardier", "De Havilland Canada", "De Havilland", "McDonnell Douglas", "Fokker", "Saab", "Sukhoi", "COMAC", "Mitsubishi", "Antonov", "Tupolev", "Ilyushin", "Cessna", "Beechcraft", "Pilatus", "Gulfstream", "Dassault", "Learjet", "Lockheed", "Douglas", "BAe", "British Aerospace", "Dornier", "Let", "Tecnam", "Piper"];
+export function manufacturerOf(...names) {
+  for (const n of names) {
+    const s = str(n);
+    if (!s) continue;
+    const m = MANUFACTURERS.find(x => s === x || s.startsWith(x + " ") || s.startsWith(x + "-"));
+    if (m) return m;
+  }
+  return null;
+}
+
+const num = v => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const day = v => (str(v) ? str(v).slice(0, 10) : null);
+
+export function normalizeAircraft(a) {
+  const photo = a.image && str(a.image.url) ? { ...photoOf(a.image), kind: "this-aircraft" } : null;
+  return {
+    registration: str(a.reg),
+    active: a.active === true,
+    model: str(a.typeName) || str(a.model),
+    modelCode: str(a.icaoCode) || str(a.modelCode),
+    manufacturer: manufacturerOf(a.typeName, a.productionLine, a.model),
+    productionLine: str(a.productionLine),
+    airline: str(a.airlineName),
+    seats: num(a.numSeats),
+    engines: num(a.numEngines),
+    engineType: str(a.engineType),
+    ageYears: num(a.ageYears),
+    deliveryDate: day(a.deliveryDate),
+    firstFlightDate: day(a.firstFlightDate),
+    serial: str(a.serial),
+    isFreighter: a.isFreighter === true,
+    photo,
+  };
+}
+
+// Returns { aircraft|null, usage }. reg: tail number, e.g. "YR-ASA".
+export async function fetchAircraft(reg, key, { fetchImpl = fetch } = {}) {
+  const { json, usage } = await request(`/aircrafts/reg/${encodeURIComponent(reg)}?withImage=true&withRegistrations=false`, key, fetchImpl);
+  return { aircraft: json ? normalizeAircraft(json) : null, usage };
+}
+
+// ---------- flight status (Tier 2, 2 units) ----------
+// Returns { flights: [raw FlightContract], usage } for a flight number on a local date.
+export async function fetchFlightStatus(number, dateLocal, key, { fetchImpl = fetch } = {}) {
+  const n = String(number).replace(/s+/g, "");
+  const { json, usage } = await request(`/flights/number/${encodeURIComponent(n)}/${dateLocal}?withAircraftImage=false&withLocation=false`, key, fetchImpl);
+  return { flights: Array.isArray(json) ? json : [], usage };
 }
 
 // RapidAPI reports the remaining quota in x-ratelimit-* headers (names vary by plan).

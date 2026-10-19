@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { boardStats, DELAY_THRESHOLD_MIN } from "./flight-model.js";
-import { fetchFlights, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
+import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
 
@@ -331,8 +331,16 @@ function renderFlights() {
 
 // ---------- flight detail ----------
 // Shows only what the provider supplied; everything else says "Not available".
-function openFlight(f, opener) {
-  if (!f) return;
+let openedFlight = null; // the flight shown in the detail window
+let openedAircraft = null; // its aircraft lookup result, once found
+
+// The lookup knows the exact model and manufacturer better than the board.
+function applyAircraft(a) {
+  if (a?.manufacturer) setText({ detailManufacturer: a.manufacturer });
+  if (a?.model) setText({ detailAircraft: a.model });
+}
+
+function fillFlight(f) {
   const NA = "Not available", h = here(f), st = statusView(f), up = updateTime(f);
   setText({
     detailTitle: [f.number, f.airline.name].filter(Boolean).join(" · "),
@@ -352,33 +360,117 @@ function openFlight(f, opener) {
   $("detailTiming").textContent = `Scheduled ${hhmm(h.scheduled)} · ${up.note} ${up.time} · local airport time` + (otherTime && !f.demo ? ` · ${f.direction === "departure" ? "Arrival at" : "Departure from"} ${otherWhere}: ${hhmm(otherTime)} local time (${otherKind})` : "");
   const dur = fmtDuration(f.scheduledDurationMinutes);
   $("detailNote").textContent = [
-    `Registration: ${f.aircraft.registration || NA}`,
     `Great-circle distance: ${f.distanceKm !== null ? f.distanceKm.toLocaleString("en-US") + " km" : NA}`,
     `Scheduled flight time: ${dur || NA}`,
   ].join(" · ") + (f.demo ? ". Sample values (demo data)." : ".");
+}
 
-  // Photo: the provider's photo is representative (may be another aircraft); demo uses an illustration.
-  const box = $("planePhoto").parentElement, img = $("planePhoto"), note = $("planePhotoNote"), p = f.aircraft.photo;
+// kind: "this-aircraft" (found by registration), "representative" (board photo), "demo", or no photo.
+function setPlanePhoto(p, kind, f) {
+  const box = $("planePhoto").parentElement, img = $("planePhoto"), note = $("planePhotoNote");
   img.onerror = () => { box.classList.add("no-photo"); note.textContent = "Photo couldn't be loaded"; };
-  if (p) {
-    box.classList.remove("no-photo");
-    img.src = p.url;
-    img.alt = "Representative photo of a " + (f.aircraft.model || "similar aircraft");
-    const by = [p.author, p.licence].filter(Boolean).map(esc).join(" · ");
-    note.innerHTML = `Representative photo · may not be this aircraft${by ? " · " + (p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${by}</a>` : by) : ""}`;
-  } else if (f.demo) {
+  if (kind === "demo") {
     box.classList.remove("no-photo");
     img.src = demoAircraftPhoto;
     img.alt = "Illustrative aircraft photo, not " + (f.aircraft.model || "this aircraft");
     note.textContent = "Illustrative photo · not this aircraft";
-  } else {
+    return;
+  }
+  if (!p) {
     box.classList.add("no-photo");
     img.removeAttribute("src");
     img.alt = "";
     note.textContent = "No aircraft photo available";
+    return;
   }
-  openModal("flightModal", opener, $("closeFlight"));
+  box.classList.remove("no-photo");
+  img.src = p.url;
+  const by = [p.author, p.licence].filter(Boolean).map(esc).join(" · ");
+  const credit = by ? " · " + (p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${by}</a>` : by) : "";
+  if (kind === "this-aircraft") {
+    img.alt = "Photo of aircraft " + (f.aircraft.registration || "");
+    note.innerHTML = `Photo of this aircraft (${esc(f.aircraft.registration || "")}) · matched automatically${credit}`;
+  } else {
+    img.alt = "Representative photo of a " + (f.aircraft.model || "similar aircraft");
+    note.innerHTML = `Representative photo · may not be this aircraft${credit}`;
+  }
 }
+
+const LOOKING = "Looking up…";
+function setAircraftSection(a, note) {
+  const fields = aircraftFields(a);
+  setText(fields);
+  for (const id of Object.keys(fields)) $(id).classList.toggle("unknown", fields[id] === "Not available" || fields[id] === LOOKING);
+  $("aircraftNote").textContent = note || "";
+}
+const onlyReg = reg => ({ registration: reg, ageYears: null, seats: null, engines: null, engineType: null, deliveryDate: null, airline: null });
+
+// Looks up the aircraft by registration (1 unit, stored 7 days on the server).
+async function lookupAircraft(f) {
+  const reg = f.aircraft.registration;
+  if (f.demo) { setAircraftSection(null, "Demo flight: no aircraft lookup."); return; }
+  if (!reg) { setAircraftSection(null, "The provider has not given this flight's registration (yet), so the aircraft can't be looked up."); return; }
+  setText({ acReg: reg, acAge: LOOKING, acSeats: LOOKING, acEngines: LOOKING, acDelivered: LOOKING, acOperator: LOOKING });
+  $("aircraftNote").textContent = "Looking up " + reg + "…";
+  let body;
+  try { body = await fetchAircraft(reg); }
+  catch (err) { if (openedFlight === f) setAircraftSection(onlyReg(reg), "Couldn't look up the aircraft (" + err.message + ")."); return; }
+  if (openedFlight !== f) return; // another flight was opened meanwhile
+  const a = body.aircraft;
+  if (!a) {
+    setAircraftSection(onlyReg(reg), body.status === "ok" ? `AeroDataBox has no record of ${reg}.` : body.notice || "Aircraft details are unavailable right now.");
+    return;
+  }
+  const looked = body.fetchedAt ? " Looked up " + body.fetchedAt.slice(0, 10) + "." : "";
+  setAircraftSection(a, "Aircraft details: AeroDataBox." + looked + (body.stale ? " " + (body.notice || "") + " Showing an older lookup." : ""));
+  openedAircraft = a;
+  applyAircraft(a);
+  if (a.photo) setPlanePhoto(a.photo, "this-aircraft", f);
+}
+
+function openFlight(f, opener) {
+  if (!f) return;
+  openedFlight = f;
+  openedAircraft = null;
+  fillFlight(f);
+  setPlanePhoto(f.aircraft.photo, f.demo ? "demo" : "representative", f);
+  $("checkRow").hidden = !!f.demo;
+  $("checkFlightBtn").disabled = false;
+  $("checkFlightNote").textContent = "Uses about 1% of the monthly free allowance.";
+  openModal("flightModal", opener, $("closeFlight"));
+  lookupAircraft(f);
+}
+
+// "Check this flight": current status of this one flight (2 units, stored 5 minutes).
+$("checkFlightBtn").onclick = async () => {
+  const f = openedFlight;
+  if (!f || f.demo || !current) return;
+  const btn = $("checkFlightBtn");
+  btn.disabled = true;
+  $("checkFlightNote").textContent = "Checking…";
+  let body;
+  try { body = await fetchFlightStatus(f, current.iata); }
+  catch (err) { if (openedFlight === f) { $("checkFlightNote").textContent = "Couldn't check (" + err.message + ")."; btn.disabled = false; } return; }
+  if (openedFlight !== f) return;
+  btn.disabled = false;
+  if (!body.flight) {
+    $("checkFlightNote").textContent = body.status === "ok" ? "AeroDataBox has no status for this flight on this date." : body.notice || "Status unavailable right now.";
+    return;
+  }
+  // Keep what the board knew about the aircraft where the status answer has nothing.
+  const known = Object.fromEntries(Object.entries(body.flight.aircraft).filter(([, v]) => v !== null));
+  const fresh = { ...body.flight, aircraft: { ...f.aircraft, ...known } };
+  if (flightState.kind === "live") {
+    flightState.flights = flightState.flights.map(x => (x.id === f.id ? fresh : x));
+    renderOverview(); renderFlights();
+  }
+  openedFlight = fresh;
+  fillFlight(fresh);
+  applyAircraft(openedAircraft);
+  // The status answer may name the aircraft when the board did not: look it up now.
+  if (!f.aircraft.registration && fresh.aircraft.registration) lookupAircraft(fresh);
+  $("checkFlightNote").textContent = `Status checked ${body.fetchedAt ? airportClock(body.fetchedAt) : ""} airport time` + (body.stale ? " (older answer)" : "") + ".";
+};
 
 // ---------- modals ----------
 function openModal(id, opener, focusEl) {

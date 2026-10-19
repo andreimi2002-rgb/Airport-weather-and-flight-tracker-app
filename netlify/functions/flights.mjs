@@ -4,7 +4,8 @@
 // how the free monthly quota is protected.
 import { getStore } from "@netlify/blobs";
 import { findAirport, isAirportCode } from "../lib/airports.mjs";
-import { getBoard, memoryStore, DEFAULT_MONTHLY_CAP } from "../lib/flights/board.mjs";
+import { getBoard } from "../lib/flights/board.mjs";
+import { memoryStore, DEFAULT_MONTHLY_UNIT_CAP } from "../lib/flights/budget.mjs";
 
 const env = name => (globalThis.Netlify?.env?.get(name) ?? process.env[name]) || null;
 
@@ -30,7 +31,7 @@ export default async (req, context) => {
   const airport = findAirport(code);
   if (!airport) return json({ error: `No airport with the code ${code}.` }, 404, 86400);
 
-  const cap = Number(env("FLIGHTS_MONTHLY_CALL_CAP")) || DEFAULT_MONTHLY_CAP;
+  const cap = Number(env("FLIGHTS_MONTHLY_UNIT_CAP")) || DEFAULT_MONTHLY_UNIT_CAP;
   let result;
   try {
     result = await getBoard(airport, { key: env("AERODATABOX_RAPIDAPI_KEY"), store: boardStore(), cap });

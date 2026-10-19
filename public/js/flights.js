@@ -40,7 +40,8 @@ export const other = f => (f.direction === "departure" ? f.arrival : f.departure
 // Label and colour class for the status pill.
 export function statusView(f, now = Date.now()) {
   if (isOverdue(f, now)) return { label: "No recent update", cls: "landed" };
-  if (isDelayed(f) && !isDone(f) && f.status !== "delayed") return { label: "Delayed", cls: "delayed" };
+  // Late but no explicit status yet: say "Delayed". Boarding, gate closed etc. keep their own label.
+  if (isDelayed(f) && ["scheduled", "expected", "check-in"].includes(f.status)) return { label: "Delayed", cls: "delayed" };
   const cls = {
     delayed: "delayed", "maybe-cancelled": "delayed",
     boarding: "boarding", "gate-closed": "boarding", "check-in": "boarding",
@@ -75,4 +76,35 @@ export function nextFlight(flights, direction, now = Date.now()) {
     const t = Date.parse((here(f).revised || here(f).scheduled)?.utc);
     return !Number.isFinite(t) || t >= now - 5 * 60000;
   });
+}
+
+// ---------- on-demand details (only when a flight is opened) ----------
+async function getJSON(url) {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || body.error) throw new Error(body?.error || "HTTP " + res.status);
+  return body;
+}
+export const fetchAircraft = reg => getJSON("/api/aircraft/" + encodeURIComponent(reg));
+
+// date: the flight's local date at this airport ("2026-10-19").
+export function fetchFlightStatus(f, iata) {
+  const number = String(f.number).replace(/\s+/g, "").toUpperCase();
+  const date = (here(f).scheduled?.local || "").slice(0, 10);
+  return getJSON(`/api/flight-status/${encodeURIComponent(number)}/${date}/${iata}`);
+}
+
+// Display helpers for the aircraft section. null -> "Not available".
+export function aircraftFields(a) {
+  const NA = "Not available";
+  if (!a) return { acReg: NA, acAge: NA, acSeats: NA, acEngines: NA, acDelivered: NA, acOperator: NA };
+  const engines = a.engines !== null ? a.engines + (a.engineType ? " × " + a.engineType.toLowerCase() : "") : a.engineType || NA;
+  return {
+    acReg: a.registration || NA,
+    acAge: a.ageYears !== null ? a.ageYears.toFixed(1) + " years" : NA,
+    acSeats: a.seats !== null ? String(a.seats) : NA,
+    acEngines: engines,
+    acDelivered: a.deliveryDate || NA,
+    acOperator: a.airline || NA,
+  };
 }

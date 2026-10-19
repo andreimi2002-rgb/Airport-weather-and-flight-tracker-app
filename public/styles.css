@@ -50,3 +50,8 @@ body{min-height:100vh}
 .plane-photo.no-photo:before{content:"✈";position:absolute;inset:0;display:grid;place-items:center;font-size:64px;color:#2a3a4c}
 .photo-note a{color:inherit}
 .photo-note:empty{display:none}
+.check-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}
+.check-row[hidden]{display:none}
+.check-row .filterbtn{cursor:pointer}
+.check-row .filterbtn:disabled{opacity:.6;cursor:default}
+.detail-field strong.unknown{color:var(--muted);font-weight:600}
