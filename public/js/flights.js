@@ -154,6 +154,13 @@ export const fetchAirportLive = iata => getJSON("/api/airport-live/" + encodeURI
 // 1 h ago to 4 h ahead), and a registration on the board, if any, is the same.
 // Returns Map(flight id -> aircraft).
 const H = 3600 * 1000;
+// "KLM1377" for KL 1377 (leading zeros ignored).
+const noZeros = s => String(s || "").replace(/^0+/, "");
+const sameNumber = (f, ac) => {
+  const n = (String(f.number || "").match(/(\d+)\s*$/) || [])[1];
+  const tail = String(ac.callsign || "").slice(3);
+  return !!n && /^\d+$/.test(tail) && noZeros(tail) === noZeros(n);
+};
 export function matchBoardLive(flights, aircraft, code, now = Date.now()) {
   const regNorm = r => String(r || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const claims = new Map();
@@ -164,9 +171,13 @@ export function matchBoardLive(flights, aircraft, code, now = Date.now()) {
     const cands = flights.filter(f => {
       if (f.demo || f.direction !== dir || other(f).airport.iata !== otherCode) return false;
       const boardReg = regNorm(f.aircraft?.registration);
-      if (boardReg) return boardReg === regNorm(ac.registration);
+      if (boardReg && boardReg === regNorm(ac.registration)) return true;
       const al = f.airline || {};
-      if (!(al.icao ? al.icao === ac.airlineIcao : (ac.airlineIata || []).includes(al.iata))) return false;
+      // Same airline, or the same flight number flown by a partner/subsidiary (LH 1654 as "LHX1654").
+      if (!(al.icao ? al.icao === ac.airlineIcao : (ac.airlineIata || []).includes(al.iata)) && !sameNumber(f, ac)) return false;
+      // The board names another aircraft (often a planned one; airlines swap
+      // aircraft): only a callsign that is exactly airline + this flight number overrides it.
+      if (boardReg && !sameNumber(f, ac)) return false;
       const m = dir === "departure" ? f.departure : f.arrival;
       const t = Date.parse((m.runway || m.revised || m.scheduled)?.utc);
       if (!Number.isFinite(t)) return false;

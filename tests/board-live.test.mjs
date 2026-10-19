@@ -28,7 +28,7 @@ test("board live: route + airline + time window, unique both ways", () => {
     ac("WZZ7QQ", "OTP", "VIE"),                                     // two Wizz flights to VIE -> none
     ac("WZZ9MM", "OTP", "MAD"),                                     // flight time far outside the window -> none
     ac("ROT611", "OTP", "CLJ", { registration: "YR-ATB" }),         // board says YR-ATK -> not this aircraft
-    ac("DLH1", "OTP", "LHR"),                                       // other airline -> none
+    ac("DLH1", "OTP", "LHR"),                                       // other airline, other number -> none
   ];
   const m = matchBoardLive(flights, aircraft, "OTP", now);
   assert.deepEqual([...m.keys()].sort(), ["arr-cph", "dep-lhr"]);
@@ -40,6 +40,17 @@ test("board live: two aircraft claiming one flight -> none; registration on the 
   assert.equal(matchBoardLive(flights, [ac("WZZ1AB", "OTP", "LHR"), ac("WZZ2CD", "OTP", "LHR")], "OTP", now).size, 0);
   const withReg = [flight("dep-reg", "departure", "CLJ", -5, { iata: "RO", icao: "ROT" }, "YR-ATK")];
   assert.equal(matchBoardLive(withReg, [ac("ROT611", "OTP", "CLJ", { registration: "YR-ATK" })], "OTP", now).size, 1);
+});
+
+test("board live: aircraft swap (board's planned registration differs) only with callsign = airline + flight number", () => {
+  const klm = { ...flight("kl1377", "arrival", "AMS", 25, { iata: "KL", icao: "KLM", name: "KLM" }, "PH-AXU"), number: "KL 1377" };
+  assert.equal(matchBoardLive([klm], [ac("KLM1377", "AMS", "OTP", { registration: "PH-AXD" })], "OTP", now).get("kl1377").registration, "PH-AXD");
+  assert.equal(matchBoardLive([klm], [ac("KLM62R", "AMS", "OTP", { registration: "PH-AXD" })], "OTP", now).size, 0);
+  assert.equal(matchBoardLive([{ ...klm, number: "KL 0377" }], [ac("KLM377", "AMS", "OTP", { registration: "PH-AXD" })], "OTP", now).size, 1);
+  // Flown by a subsidiary under its own prefix, same number
+  const lh = { ...flight("lh1654", "arrival", "MUC", 30, { iata: "LH", icao: "DLH", name: "Lufthansa" }), number: "LH 1654" };
+  assert.equal(matchBoardLive([lh], [ac("LHX1654", "MUC", "OTP")], "OTP", now).size, 1);
+  assert.equal(matchBoardLive([lh], [ac("LHX1655", "MUC", "OTP")], "OTP", now).size, 0);
 });
 
 test("airport live: one area call, keeps aircraft on routes to or from the airport", async () => {

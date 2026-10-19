@@ -685,9 +685,10 @@ const AIRBORNE = ["departed", "en-route", "approaching"];
 async function lookupAircraft(f) {
   if (f.demo) { fd.aircraftNote = "Demo flight: no aircraft lookup."; renderFlightDrawer(); return; }
   let reg = f.aircraft.registration, regFrom = reg ? "board" : null, why = "";
-  // Already matched by the board's live check: no extra lookup needed.
+  // Already matched by the board's live check: no extra lookup needed. It also
+  // wins over the board's registration (often the planned aircraft, swapped since).
   const known = boardLiveAc.get(f.id);
-  if (!reg && known?.registration && !typeConflicts(known.typeCode, f.aircraft.model)) { reg = known.registration; regFrom = "adsb"; setLive(f, known); }
+  if (known?.registration) { reg = known.registration; regFrom = "adsb"; setLive(f, known); }
   const cand = callsignFor(f);
   if (!reg) {
     fd.aircraftNote = "Looking for this flight in live ADS-B data…";
