@@ -14,7 +14,20 @@ export const qid = url => String(url || "").split("/").pop() || null;
 
 const norm = s => String(s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 
-// Groups Wikidata rows (a, iata, icao, img) by IATA code.
+// Wikidata statement rank -> sort order: preferred photos first, then normal.
+// (Deprecated ones are already left out by the query.)
+export const rankOrder = rank => (/PreferredRank$/.test(String(rank || "")) ? 0 : 1);
+
+// file -> best rank seen for it
+function addImage(images, file, rank) {
+  if (!file) return;
+  const r = rankOrder(rank);
+  if (!images.has(file) || r < images.get(file)) images.set(file, r);
+}
+// Preferred first, then by name, so the order is stable between runs.
+export const orderedImages = images => [...images].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])).map(([file]) => file);
+
+// Groups Wikidata rows (a, iata, icao, img, rank) by IATA code.
 export function groupAirportItems(rows) {
   const byIata = new Map();
   for (const r of rows) {
@@ -23,11 +36,10 @@ export function groupAirportItems(rows) {
     const id = qid(r.a);
     if (!byIata.has(iata)) byIata.set(iata, new Map());
     const items = byIata.get(iata);
-    if (!items.has(id)) items.set(id, { qid: id, icao: new Set(), images: new Set() });
+    if (!items.has(id)) items.set(id, { qid: id, icao: new Set(), images: new Map() });
     const item = items.get(id);
     if (r.icao) item.icao.add(String(r.icao).trim().toUpperCase());
-    const file = fileNameFromFilePath(r.img);
-    if (file) item.images.add(file);
+    addImage(item.images, fileNameFromFilePath(r.img), r.rank);
   }
   return byIata;
 }
@@ -41,19 +53,18 @@ export function matchAirport(airport, byIata) {
   if (candidates.length > 1 && airport.icao) candidates = candidates.filter(it => it.icao.has(airport.icao));
   if (candidates.length !== 1) return null;
   const it = candidates[0];
-  return { qid: it.qid, images: [...it.images].sort() };
+  return { qid: it.qid, images: orderedImages(it.images) };
 }
 
-// Groups city rows (a, city, cityLabel, cimg) by airport item.
+// Groups city rows (a, city, cityLabel, cimg, crank) by airport item.
 export function groupCities(rows) {
   const byAirport = new Map();
   for (const r of rows) {
     const a = qid(r.a), c = qid(r.city);
     if (!byAirport.has(a)) byAirport.set(a, new Map());
     const cities = byAirport.get(a);
-    if (!cities.has(c)) cities.set(c, { qid: c, name: r.cityLabel || null, images: new Set() });
-    const file = fileNameFromFilePath(r.cimg);
-    if (file) cities.get(c).images.add(file);
+    if (!cities.has(c)) cities.set(c, { qid: c, name: r.cityLabel || null, images: new Map() });
+    addImage(cities.get(c).images, fileNameFromFilePath(r.cimg), r.crank);
   }
   return byAirport;
 }
@@ -69,11 +80,12 @@ export function matchCity(airport, airportQid, citiesByAirport) {
     const same = cities.filter(c => norm(c.name) === norm(airport.city));
     if (same.length === 1) city = same[0];
   }
-  return city ? { qid: city.qid, name: city.name, images: [...city.images].sort() } : null;
+  return city ? { qid: city.qid, name: city.name, images: orderedImages(city.images) } : null;
 }
 
 // Only free licences that allow showing the photo with credit.
-const LICENCE_OK = /^(public domain|pd(-[\w.-]+)?|cc0( 1\.0)?|cc[ -]by(-sa)?( \d\.\d)?( [a-z]{2,3})?)$/i;
+// "Attribution" is the Commons {{Attribution}} licence: free use, credit required.
+const LICENCE_OK = /^(public domain|pd(-[\w.-]+)?|cc0( 1\.0)?|cc[ -]by(-sa)?( \d\.\d)?( [a-z]{2,3})?|attribution)$/i;
 export function acceptLicence(name) {
   const n = String(name || "").trim();
   if (!n || /\b(nc|nd)\b/i.test(n)) return false;
