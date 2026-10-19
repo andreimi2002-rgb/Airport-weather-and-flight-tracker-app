@@ -1,20 +1,49 @@
-# Airport Live — Prototype v0.2
+# Airport Live — Prototype
 
-Responsive airport dashboard prototype featuring:
-- Airport and city photo panels
-- Airport switcher (SEA, LHR, OTP, JFK)
-- Airport local clock and sample weather
-- Searchable/filterable arrivals and departures
-- Clickable flight detail modal with aircraft photo and aircraft/route information
-- Responsive desktop and mobile layout
+Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript, no build step, deployed on Netlify.
+
+## What works now
+- About 9,000 airports worldwide (every airport with an IATA code), searchable by code, name, city, region or country, with or without accents (e.g. `OTP`, `LROP`, `coanda`, `Tokyo`).
+- A web address per airport: `/airport/OTP`. ICAO codes work too (`/airport/LROP` redirects to `/airport/OTP`). Browser Back/Forward work. Unknown codes show "Airport not found".
+- Real airport details from OurAirports: name, city, region, country, ICAO code, number of open runways. Local clock in the airport's time zone when the time zone is known; otherwise "Not available".
+- Saved airports (★), stored in this browser only. The app reopens the last airport you viewed.
+- Keyboard: arrows + Enter in the airport search, Escape closes windows.
+
+## Still demo data (clearly labelled in the app)
+- Weather: sample values for SEA, LHR, OTP and JFK only. Other airports show "not connected yet".
+- Flights: sample board for SEA only. Other airports show "No flight data yet".
+- Photos: illustrative Unsplash photos for SEA, LHR, OTP, JFK. They do not show the actual airport. Other airports show a styled panel. Broken photos fall back to that panel.
 
 ## Run locally
-Open `index.html` in a modern browser. No build step or dependencies required.
+```
+npm run serve     # http://localhost:8080 (no install needed, Node 20+)
+npm test          # automated tests
+```
+Opening `index.html` directly from disk does not work any more: the app loads its airport list and needs a web server.
 
-## Deploy to Netlify
-Create a GitHub repository, upload `index.html` and this README, import the repository in Netlify, leave build command empty, and set publish directory to `.`.
+## Refresh the airport list
+```
+npm run build:airports
+```
+Downloads OurAirports and mwgg/Airports, writes `public/data/airports.json`, and refuses to write if the result looks broken. Commit the new file afterwards.
 
-## Important data and image notes
-This is a prototype. Flight statuses, schedules, aircraft assignments and weather are illustrative demo values, not live data. The clock uses each airport's actual time zone. Photos are external Unsplash image URLs used for design preview; confirm usage rights and replace with verified airport/city/aircraft-specific licensed images for a public release. The aircraft photo is illustrative and is not guaranteed to depict the exact model in each sample flight.
+## Project layout
+- `public/` — the site Netlify publishes (`index.html`, `styles.css`, `js/`, `data/airports.json`)
+- `public/js/airports.js` — airport search, lookup and URL handling
+- `public/js/demo-data.js` — all demo values in one place
+- `public/js/app.js` — page logic
+- `scripts/` — airport data builder and local server
+- `tests/` — tests (`node --test`)
+- `netlify.toml` — publish folder and the `/airport/*` address rule
 
-A live release needs an aviation API whose license permits display and redistribution, plus server-side API credentials, caching, rate limiting, error handling, and source/last-updated labels. Aircraft registration, age, configuration, and other details should only be shown when the data provider supplies them.
+## Data sources
+| Source | Used for | Licence |
+|---|---|---|
+| [OurAirports](https://ourairports.com/data/) | Airports, codes, names, locations, runways, countries, regions | Public domain |
+| [mwgg/Airports](https://github.com/mwgg/Airports) | Airport time zones | MIT, Copyright (c) 2014 mwgg |
+| [Unsplash](https://unsplash.com) | Illustrative demo photos (to be replaced) | Unsplash licence; not verified per photo |
+
+Time zones are matched by ICAO/IATA code. When the two disagree or no match exists (mostly small airfields), the time zone is left empty rather than guessed.
+
+## Deploy
+Netlify reads `netlify.toml`: publish directory `public`, no build command. In the Netlify UI the **Base directory** must be empty (the repository root).
