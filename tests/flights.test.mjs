@@ -113,21 +113,21 @@ test("stored board is reused while fresh, then refreshed", async () => {
   assert.equal(r.cacheSeconds, 15 * 60);
   await getBoard(OTP, { key: "k", store, fetchImpl: f, now: NOW + FRESH_MS + 1 });
   assert.equal(f.calls.length, 2, "refreshed after FRESH_MS");
-  assert.equal((await store.get("usage/2026-10")).calls, 2);
+  assert.equal((await store.get("usage/2026-10")).units, 4, "2 boards x 2 units");
 });
 
 test("monthly cap stops calls and serves the last board as stale", async () => {
   const store = memoryStore();
   const f = fakeFetch(() => ok(SAMPLE));
-  await getBoard(OTP, { key: "k", store, fetchImpl: f, now: NOW, cap: 1 });
-  const r = await getBoard(OTP, { key: "k", store, fetchImpl: f, now: NOW + FRESH_MS + 1, cap: 1 });
+  await getBoard(OTP, { key: "k", store, fetchImpl: f, now: NOW, cap: 2 });
+  const r = await getBoard(OTP, { key: "k", store, fetchImpl: f, now: NOW + FRESH_MS + 1, cap: 2 });
   assert.equal(f.calls.length, 1);
   assert.equal(r.body.status, "quota");
   assert.equal(r.body.stale, true);
   assert.equal(r.body.board.departures.length, 3);
   assert.match(r.body.notice, /2026-11-01/);
   // A different airport with no stored board: quota message, no data.
-  const r2 = await getBoard({ ...OTP, iata: "CLJ" }, { key: "k", store, fetchImpl: f, now: NOW, cap: 1 });
+  const r2 = await getBoard({ ...OTP, iata: "CLJ" }, { key: "k", store, fetchImpl: f, now: NOW, cap: 2 });
   assert.equal(r2.body.status, "quota");
   assert.equal(r2.body.board, null);
 });
@@ -158,7 +158,7 @@ test("provider errors: stale board if there is one, otherwise an error; bad key 
   assert.match(r.body.notice, /did not answer in time/);
   r = await getBoard({ ...OTP, iata: "IAS" }, { key: "k", store, fetchImpl: fakeFetch(() => new Response("{}", { status: 403 })), now: NOW });
   assert.match(r.body.notice, /refused the key/);
-  assert.equal((await store.get("usage/2026-10")).calls, 2, "refused key not counted (1 ok + 1 503 counted)");
+  assert.equal((await store.get("usage/2026-10")).units, 4, "refused key not counted (1 ok + 1 503 counted, 2 units each)");
 });
 
 test("provider 429 'Too many requests' (per-second limit) is temporary, not the month", async () => {
