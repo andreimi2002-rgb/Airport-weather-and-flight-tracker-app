@@ -1,0 +1,14 @@
+{
+  "name": "airport-live",
+  "private": true,
+  "type": "module",
+  "description": "Airport Live: airport dashboard for desktop and phone browsers.",
+  "scripts": {
+    "test": "node --test",
+    "serve": "node scripts/serve.mjs",
+    "build:airports": "node scripts/build-airports.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
