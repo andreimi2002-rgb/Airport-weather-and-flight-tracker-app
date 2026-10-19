@@ -635,8 +635,9 @@ async function lookupAircraft(f) {
     }
     // 2. Airlines mostly fly under callsigns like "WMT1LH", not the flight number:
     //    find the one aircraft of this airline flying exactly this route near where the flight should be.
-    const from = lookup(f.departure.airport.iata), to = lookup(f.arrival.airport.iata), icao = f.airline?.icao;
-    if (!reg && !icao) why = "the provider gave no airline ICAO code, so live data can't be matched";
+    // The airline's ICAO code, or its IATA code (the server then tries every airline using it).
+    const from = lookup(f.departure.airport.iata), to = lookup(f.arrival.airport.iata), icao = f.airline?.icao || f.airline?.iata;
+    if (!reg && !icao) why = "the provider gave no airline code, so live data can't be matched";
     else if (!reg && (!from || !to)) why = "one of the airports is not in our airport list";
     if (!reg && icao && from && to) {
       try {
@@ -648,7 +649,8 @@ async function lookupAircraft(f) {
         else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, not a ${f.aircraft.model}`;
         else if (body.status !== "ok") why = body.notice || "live data unavailable";
         else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
-        else if (!body.airlineNearby) why = `no ${icao} aircraft within 250 nm (${body.nearby ?? 0} aircraft seen)`;
+        else if (body.airlineUnknown) why = `the airline code ${icao} is not in the open airline list`;
+        else if (!body.airlineNearby) why = `no ${(body.airlines || [icao]).join("/")} aircraft within 250 nm (${body.nearby ?? 0} aircraft seen)`;
         else if (!body.candidates) why = `${body.airlineNearby} ${icao} aircraft nearby, none on the ${from.iata}–${to.iata} line or at either airport`;
         else why = `checked ${(body.checked || []).map(c => `${c.callsign} ${c.route || "route unknown"}`).join(", ")}; none on ${from.iata}–${to.iata}`;
       } catch (err) { why = "live lookup failed (" + err.message + ")"; }

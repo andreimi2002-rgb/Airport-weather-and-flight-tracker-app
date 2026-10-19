@@ -118,13 +118,16 @@ export function getLiveAircraft(callsign, { store, now = Date.now(), fetchImpl =
 // ---------- identify a flight by airline + route (callsigns are often alphanumeric) ----------
 // Airlines fly most flights under callsigns like "WMT5CS" or "ROT276H", not
 // "<ICAO><flight number>". So: list the aircraft near where the flight should
-// be, keep those of the flight's airline, look up each one's route, and accept
-// an aircraft only if it is the one aircraft flying exactly this route.
+// be (adsb.lol, one call), keep those of the flight's airline on this route's
+// line, and look up each callsign's route in the open VRS standing data
+// (vradarserver/standing-data on GitHub, CC0, one small file per airline).
+// Only the one aircraft flying exactly this route is accepted.
 export const NEAR_RADIUS_NM = 250;   // adsb.lol maximum
 export const NEAR_FRESH_MS = 2 * 60 * 1000;
-export const ROUTE_FRESH_MS = 6 * 3600 * 1000;
-export const UNKNOWN_ROUTE_FRESH_MS = 20 * 60 * 1000; // "route unknown" is asked again sooner
-const MAX_ROUTE_LOOKUPS = 6;
+export const ROUTES_FRESH_MS = 24 * 3600 * 1000;
+export const AIRLINES_FRESH_MS = 7 * 24 * 3600 * 1000;
+export const STANDING_DATA = "https://raw.githubusercontent.com/vradarserver/standing-data/main";
+export const VRS = { name: "VRS standing data", url: "https://github.com/vradarserver/standing-data", licence: "CC0" };
 const ADSB_GAP_MS = 300; // adsb.lol allows about 4 requests a second
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
@@ -137,13 +140,12 @@ async function spendAdsb(store, now, cap) {
   await store.setJSON(key, day);
 }
 
-// nullFreshMs: how long an empty answer (e.g. "route unknown") is reused; often shorter.
-async function cachedAdsb(store, key, freshMs, now, cap, load, nullFreshMs = freshMs) {
+async function cachedAdsb(store, key, freshMs, now, cap, load) {
   const saved = await store.get(key, { type: "json" });
-  if (saved && now - Date.parse(saved.fetchedAt) < (saved.value === null ? nullFreshMs : freshMs)) return saved.value;
+  if (saved && now - Date.parse(saved.fetchedAt) < freshMs) return saved.value;
   await spendAdsb(store, now, cap);
   let value;
-  // Spaced out, and one retry after a "too many requests".
+  // One retry after a "too many requests".
   try { value = await load(); }
   catch (err) { if (err.status !== 429) throw err; await sleep(1200); value = await load(); }
   await sleep(ADSB_GAP_MS);
@@ -151,11 +153,61 @@ async function cachedAdsb(store, key, freshMs, now, cap, load, nullFreshMs = fre
   return value;
 }
 
-// Route of a callsign from adsb.lol (standing data): { from, to, airline, plausible } or null.
-export function normalizeRoute(json) {
-  const pair = str(json?._airport_codes_iata);
-  const m = pair && /^([A-Z0-9]{3})-([A-Z0-9]{3})$/.exec(pair); // multi-leg routes ("A-B-C") are not used
-  return m ? { from: m[1], to: m[2], airline: str(json.airline_code), plausible: json.plausible !== false } : null;
+// Plain text from GitHub; null when the file doesn't exist (an airline with no routes).
+async function getText(url, fetchImpl) {
+  let res;
+  try { res = await fetchImpl(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(TIMEOUT_MS) }); }
+  catch (err) { throw Object.assign(new Error(err.name === "TimeoutError" ? "did not answer in time" : "could not be reached"), { status: null }); }
+  if (res.status === 404) return null;
+  if (!res.ok) throw Object.assign(new Error("answered HTTP " + res.status), { status: res.status });
+  return res.text();
+}
+
+// Stored files from the standing data, refreshed after freshMs; an older copy is used if GitHub fails.
+async function cachedFile(store, key, freshMs, now, load) {
+  const saved = await store.get(key, { type: "json" });
+  if (saved && now - Date.parse(saved.fetchedAt) < freshMs) return saved.value;
+  try {
+    const value = await load();
+    await store.setJSON(key, { fetchedAt: new Date(now).toISOString(), value });
+    return value;
+  } catch (err) {
+    if (saved) return saved.value;
+    throw Object.assign(new Error("Route data (GitHub) " + err.message), { status: err.status });
+  }
+}
+
+const csvRows = text => String(text || "").replace(/^﻿/, "").split(/\r?\n/).slice(1).filter(Boolean).map(l => l.split(","));
+
+// routes/schema-01/W/WMT-all.csv: Callsign,Code,Number,AirlineCode,AirportCodes ("LROP-LEVC")
+// -> { WMT1LH: "LROP-LEVC" }. Routes with stops ("A-B-C") are left out.
+export function parseRoutesCsv(text) {
+  const out = {};
+  for (const c of csvRows(text)) if (c[0] && /^[A-Z0-9]{3,4}-[A-Z0-9]{3,4}$/.test((c[4] || "").trim())) out[c[0].trim().toUpperCase()] = c[4].trim();
+  return out;
+}
+
+// airlines/schema-01/airlines.csv: Code,Name,ICAO,IATA,... -> { W4: ["WMT"], H4: ["HYS", "IIN"] }
+export function parseAirlinesCsv(text) {
+  const out = {};
+  for (const c of csvRows(text)) {
+    const icao = (c[2] || "").trim().toUpperCase(), iata = (c[3] || "").trim().toUpperCase();
+    if (/^[A-Z]{3}$/.test(icao) && /^[A-Z0-9]{2}$/.test(iata)) {
+      out[iata] ??= [];
+      if (!out[iata].includes(icao)) out[iata].push(icao);
+    }
+  }
+  return out;
+}
+
+export const airlineRoutes = (icao, store, now, fetchImpl) =>
+  cachedFile(store, "routes/" + icao, ROUTES_FRESH_MS, now, async () => parseRoutesCsv(await getText(`${STANDING_DATA}/routes/schema-01/${icao[0]}/${icao}-all.csv`, fetchImpl)));
+
+// The airline's ICAO codes: given (3 letters), or all ICAO codes that use this IATA code.
+export async function airlineIcaos(code, store, now, fetchImpl) {
+  if (/^[A-Z]{3}$/.test(code)) return [code];
+  const map = await cachedFile(store, "airlines", AIRLINES_FRESH_MS, now, async () => parseAirlinesCsv(await getText(`${STANDING_DATA}/airlines/schema-01/airlines.csv`, fetchImpl)));
+  return (map[code] || []).slice(0, 4);
 }
 
 // ---------- geometry: is an aircraft on the route between two airports? ----------
@@ -185,48 +237,42 @@ export function onRoute(p, A, B) {
   return { ok: crossNm <= 60 && alongNm >= -30 && alongNm <= distNm(A, B) + 30, score: crossNm };
 }
 
-// q: { airline: "WMT", number: "3185" | null, from: "MXP", to: "OTP", lat, lon, fromPos?, toPos? }
+// q: { airline: "WMT" (ICAO) or "W4" (IATA), number: "3185" | null, from: "MXP", to: "OTP", lat, lon, fromPos?, toPos? }
 // (lat/lon: where the flight should be now; fromPos/toPos: the airports' coordinates)
-export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP } = {}) {
+// iataForIcao: "LROP" -> "OTP", to compare the standing data's ICAO airport codes with ours.
+export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP, iataForIcao = () => null } = {}) {
   const lat = Math.round(q.lat * 2) / 2, lon = Math.round(q.lon * 2) / 2; // 0.5° grid: nearby lookups share one answer
   try {
+    const icaos = await airlineIcaos(q.airline, store, now, fetchImpl);
+    if (!icaos.length) return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: null, airlineUnknown: true, source: ADSBLOL }), cacheSeconds: 600 };
     const near = await cachedAdsb(store, `near/${lat},${lon}`, NEAR_FRESH_MS, now, dailyCap, async () => {
       const j = await getJson(`https://api.adsb.lol/v2/point/${lat}/${lon}/${NEAR_RADIUS_NM}`, fetchImpl);
       return (Array.isArray(j?.ac) ? j.ac : []).filter(a => str(a.flight) && str(a.r)).map(a => ({ ...normalizeAdsb(a, now), lat: num(a.lat), lon: num(a.lon) }));
     });
-    // This airline's aircraft, nearest to where the flight should be first.
+    const icaoOf = a => icaos.find(i => a.callsign.toUpperCase().startsWith(i));
+    const airlineAll = near.filter(icaoOf);
+    // An aircraft whose callsign is exactly the airline's ICAO code + our flight number (LO 646 -> LOT646).
+    const exact = new Set(q.number ? icaos.map(i => i + q.number) : []);
     const d2 = a => ((a.lat ?? lat) - q.lat) ** 2 + ((a.lon ?? lon) - q.lon) ** 2;
-    const airlineAll = near.filter(a => a.callsign.toUpperCase().startsWith(q.airline));
-    // An aircraft whose callsign is exactly the airline's ICAO code + our flight number (LO 646 -> LOT646) is checked first.
-    const exact = q.number ? q.airline + q.number : null;
-    // With the airports' positions: only aircraft on this route's line (or at either airport), closest to the line first.
-    const hasRoute = q.fromPos && q.toPos;
-    const placed = airlineAll.map(a => ({ a, r: hasRoute ? onRoute(a, q.fromPos, q.toPos) : { ok: true, score: d2(a) } }));
-    const mine = placed.filter(x => x.r.ok || x.a.callsign === exact)
-      .sort((x, y) => (y.a.callsign === exact) - (x.a.callsign === exact) || x.r.score - y.r.score)
-      .map(x => x.a).slice(0, MAX_ROUTE_LOOKUPS);
-    const seen = [];
-    const matches = [];
+    const hasLine = q.fromPos && q.toPos;
+    const placed = airlineAll.map(a => ({ a, r: hasLine ? onRoute(a, q.fromPos, q.toPos) : { ok: true, score: d2(a) } }));
+    const mine = placed.filter(x => x.r.ok || exact.has(x.a.callsign)).sort((x, y) => x.r.score - y.r.score).map(x => x.a);
+    const routesBy = {};
+    for (const i of new Set(mine.map(icaoOf))) routesBy[i] = await airlineRoutes(i, store, now, fetchImpl);
+    const seen = [], matches = [];
     for (const a of mine) {
-      // adsb.lol answers HTTP 500/404 when it doesn't know a callsign's route: that is "no route", not a failure.
-      const route = await cachedAdsb(store, "route/" + a.callsign, ROUTE_FRESH_MS, now, dailyCap, async () => {
-        try { return normalizeRoute(await getJson(`https://api.adsb.lol/api/0/route/${encodeURIComponent(a.callsign)}/${a.lat ?? lat}/${a.lon ?? lon}`, fetchImpl)); }
-        catch (err) {
-          if (err.status !== 500 && err.status !== 404) throw err;
-          // The route service sometimes answers 500 for a moment: ask once more before calling it unknown.
-          await sleep(600);
-          try { return normalizeRoute(await getJson(`https://api.adsb.lol/api/0/route/${encodeURIComponent(a.callsign)}/${a.lat ?? lat}/${a.lon ?? lon}`, fetchImpl)); }
-          catch (e2) { if (e2.status === 500 || e2.status === 404) return null; throw e2; }
-        }
-      }, UNKNOWN_ROUTE_FRESH_MS);
+      const pair = routesBy[icaoOf(a)]?.[a.callsign.toUpperCase()] || null;
+      const [f4, t4] = pair ? pair.split("-") : [];
+      const route = pair ? { from: iataForIcao(f4) || f4, to: iataForIcao(t4) || t4 } : null;
       seen.push({ callsign: a.callsign, route: route ? route.from + "-" + route.to : null });
-      if (route && route.plausible && route.from === q.from && route.to === q.to) matches.push({ ...a, route });
+      if (route && route.from === q.from && route.to === q.to) matches.push({ ...a, route });
       // Callsign = our flight number and no known route saying otherwise: the same flight.
-      else if (!route && a.callsign === exact) matches.push({ ...a, route: { from: q.from, to: q.to, airline: q.airline, plausible: true, byNumber: true } });
+      else if (!route && exact.has(a.callsign)) matches.push({ ...a, route: { from: q.from, to: q.to, byNumber: true } });
     }
-    // Exactly one aircraft of this airline on exactly this route; anything else is not trusted.
-    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, nearby: near.length, airlineNearby: airlineAll.length, onRouteLine: placed.filter(x => x.r.ok).length, candidates: mine.length, checked: seen, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };
+    // Exactly one aircraft on exactly this route; anything else is not trusted.
+    return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, airlines: icaos, nearby: near.length, airlineNearby: airlineAll.length, onRouteLine: placed.filter(x => x.r.ok).length, candidates: mine.length, checked: seen.slice(0, 6), matches: matches.length, source: ADSBLOL, routes: VRS }), cacheSeconds: 120 };
   } catch (err) {
-    return { body: base(err.quota ? "quota" : "error", { aircraft: null, notice: err.quota ? err.message : "adsb.lol " + err.message }), cacheSeconds: 60 };
+    const msg = String(err.message || err);
+    return { body: base(err.quota ? "quota" : "error", { aircraft: null, notice: err.quota || msg.startsWith("Route data") ? msg : "adsb.lol " + msg }), cacheSeconds: 60 };
   }
 }
