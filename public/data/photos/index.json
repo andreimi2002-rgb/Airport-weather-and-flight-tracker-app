@@ -2,16 +2,16 @@
  "version": 1,
  "generated": "2026-10-19",
  "counts": {
-  "airports": 5970,
-  "airportPhotos": 3824,
-  "cityPhotos": 4363,
-  "cityNames": 5045
+  "airports": 6079,
+  "airportPhotos": 3901,
+  "cityPhotos": 4746,
+  "cityNames": 5178
  },
  "rejected": {
-  "too": 807,
-  "no": 96,
-  "licence": 207,
-  "type": 33
+  "too": 833,
+  "no": 104,
+  "licence": 229,
+  "type": 34
  },
  "linkProblems": {
   "rate-limited": 1
