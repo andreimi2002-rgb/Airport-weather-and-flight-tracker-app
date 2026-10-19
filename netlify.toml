@@ -16,3 +16,9 @@
   from = "/airport/*"
   to = "/index.html"
   status = 200
+
+# Every aircraft has its own page, e.g. /aircraft/YR-ASA.
+[[redirects]]
+  from = "/aircraft/*"
+  to = "/aircraft.html"
+  status = 200

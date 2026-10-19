@@ -465,3 +465,51 @@ kbd,.kbd-btn{font-family:var(--mono);font-size:11px;border:1px solid var(--line2
 .fd-sub h4 small{font-size:11px;letter-spacing:0;text-transform:none;font-weight:500;font-family:var(--mono)}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 @media(max-width:760px){.grid3{grid-template-columns:1fr}}
+
+/* ---------- aircraft page (/aircraft/YR-ASA) ---------- */
+.reg-link{color:var(--text);text-decoration:none;border-bottom:1px dashed var(--line2)}
+.reg-link:hover{color:var(--accent);border-color:var(--accent)}
+.reg-search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#0d151e;border-radius:12px;padding:0 10px 0 13px;color:var(--muted);min-width:240px}
+.reg-search:focus-within{border-color:var(--line2);color:var(--text)}
+.reg-search input{flex:1;min-width:0;width:0;background:transparent;border:0;outline:0;color:var(--text);font:600 13px var(--mono);padding:10px 0;text-transform:uppercase}
+.reg-search input::placeholder{text-transform:none;font-family:var(--sans);font-weight:400;color:var(--muted)}
+.ac-hero{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start;margin-top:6px}
+.ac-hero .plane-photo{border-radius:var(--radius);border:1px solid var(--line)}
+.ac-hero .photo-note{font-size:11px}
+.ac-head{display:flex;flex-direction:column;gap:12px;min-width:0}
+.ac-reg{margin:0;font:800 64px/1 var(--mono);letter-spacing:-.05em}
+.ac-model{font-size:15px;color:var(--muted);font-weight:600}
+.ac-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ac-status .status{font-size:12px;padding:7px 11px}
+.ac-status .note{margin:0;font-family:var(--mono)}
+.ac-head .note{margin-top:0}
+.ac-details{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.route-end .rc a{color:inherit;text-decoration:none}
+.route-end .rc a:hover{color:var(--accent)}
+.hist-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hist-controls .note{margin:0}
+.hist{margin-top:14px}
+.h-row{display:grid;grid-template-columns:minmax(110px,.8fr) minmax(0,1fr) 20px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid #1b2733}
+.h-row:first-child{border-top:0}
+.h-num b{display:block;font:700 14px var(--mono)}
+.h-num span,.h-end span{display:block;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h-end b{font:800 18px var(--mono);letter-spacing:-.03em}
+.h-end b a{color:inherit;text-decoration:none}
+.h-end b a:hover{color:var(--accent)}
+.h-end .mono{font-family:var(--mono);color:var(--text)}
+.h-arrow{color:var(--muted);text-align:center}
+@media(max-width:980px){
+  .ac-hero{grid-template-columns:1fr}
+  .ac-details{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .reg-search{min-width:0;flex:1}
+  .ac-reg{font-size:46px}
+  .ac-details{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .h-row{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);row-gap:6px}
+  .h-num{grid-column:1/-1;display:flex;align-items:baseline;gap:8px;min-width:0}
+  .h-num span{flex:1}
+  .h-st{grid-column:1/-1}
+  .hist-controls .primary{flex:1 1 100%}
+  .hist-controls select{flex:1 1 100%}
+}

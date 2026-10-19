@@ -1,8 +1,9 @@
 // On-demand details, only when someone opens a flight:
 // - aircraft by registration (1 unit), stored 7 days (Basic plan caching limit),
-// - current status of one flight (2 units), stored 5 minutes.
+// - current status of one flight (2 units), stored 5 minutes,
+// - one aircraft's flights on a day (2 units, only on request): today 10 minutes, past days 7 days.
 // Both use the shared monthly unit budget and never present old data as new.
-import { fetchAircraft, fetchFlightStatus, normalizeFlight, PROVIDER } from "./aerodatabox.mjs";
+import { fetchAircraft, fetchFlightStatus, fetchAircraftFlights, normalizeFlight, PROVIDER } from "./aerodatabox.mjs";
 import { readUsage, canSpend, recordCall, quotaNotice, UNITS, DEFAULT_MONTHLY_UNIT_CAP } from "./budget.mjs";
 
 export const AIRCRAFT_FRESH_MS = 7 * 24 * 3600 * 1000;
@@ -60,6 +61,22 @@ export function getFlightStatus(number, dateLocal, here, { key, store, now = Dat
       const arr = flights.find(f => f.arrival?.airport?.iata === here.iata);
       const flight = dep ? normalizeFlight(dep, "departure", hereRef) : arr ? normalizeFlight(arr, "arrival", hereRef) : null;
       return { value: { flight }, usage };
+    },
+  });
+}
+
+export const HISTORY_TODAY_FRESH_MS = 10 * 60 * 1000;
+
+// Flights of aircraft reg on a local date, newest first. Body: { status, flights: [Flight], fetchedAt, ... }
+// A past day doesn't change, so it is kept longer (UTC date: close enough to "past").
+export function getAircraftFlights(reg, dateLocal, { key, store, now = Date.now(), fetchImpl, cap = DEFAULT_MONTHLY_UNIT_CAP } = {}) {
+  const past = dateLocal < new Date(now - 24 * 3600 * 1000).toISOString().slice(0, 10);
+  return cachedCall({
+    key, store, now, cap, units: UNITS.flightStatus, freshMs: past ? AIRCRAFT_FRESH_MS : HISTORY_TODAY_FRESH_MS, storeKey: `history/${reg}/${dateLocal}`,
+    call: async () => {
+      const { flights, usage } = await fetchAircraftFlights(reg, dateLocal, key, { fetchImpl });
+      const list = flights.map(f => normalizeFlight(f, "departure")).sort((a, b) => String(b.departure.scheduled?.utc || "").localeCompare(String(a.departure.scheduled?.utc || "")));
+      return { value: { flights: list }, usage };
     },
   });
 }

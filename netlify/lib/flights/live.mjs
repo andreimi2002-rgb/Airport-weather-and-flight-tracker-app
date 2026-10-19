@@ -279,3 +279,49 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
     return { body: base(err.quota ? "quota" : "error", { aircraft: null, notice: err.quota || msg.startsWith("Route data") ? msg : "adsb.lol " + msg }), cacheSeconds: 60 };
   }
 }
+
+// ---------- one aircraft by registration (the aircraft page) ----------
+export const REG_FRESH_MS = 2 * 60 * 1000;
+export const ROUTE_NEAR_AIRPORT_NM = 10;
+
+// Body: { status, aircraft|null, route|null, routeNote, fetchedAt }: where this
+// aircraft is now (adsb.lol, by registration) and, when its callsign has a
+// known route in the VRS standing data and the aircraft is on that route's
+// line (or at one of its airports), that route. Otherwise no route: a
+// callsign's usual route is not proof of today's flight.
+// airportByIcao: ICAO -> { iata, lat, lon } | null (from our airport list).
+export function getAircraftNow(reg, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP, airportByIcao = () => null } = {}) {
+  return stored({
+    store, now, key: "reg/" + reg, freshMs: REG_FRESH_MS,
+    dailyKey: "adsb/" + new Date(now).toISOString().slice(0, 10), dailyCap,
+    call: async () => {
+      let json;
+      try { json = await getJson(`https://api.adsb.lol/v2/reg/${encodeURIComponent(reg)}`, fetchImpl); }
+      catch (err) { throw Object.assign(new Error("adsb.lol " + err.message), { status: err.status }); }
+      const same = (Array.isArray(json?.ac) ? json.ac : []).filter(a => str(a.r)?.toUpperCase() === reg);
+      const aircraft = same.length === 1 ? normalizeAdsb(same[0], now) : null;
+      const { route, routeNote } = await routeOf(aircraft, { store, now, fetchImpl, airportByIcao });
+      return { aircraft, route, routeNote, source: ADSBLOL };
+    },
+  });
+}
+
+async function routeOf(ac, { store, now, fetchImpl, airportByIcao }) {
+  const cs = ac?.callsign?.toUpperCase();
+  if (!cs) return { route: null, routeNote: ac ? "No callsign in the live data." : null };
+  if (!/^[A-Z]{3}[A-Z0-9]{1,5}$/.test(cs)) return { route: null, routeNote: `${cs} is not an airline callsign.` };
+  let routes;
+  try { routes = await airlineRoutes(cs.slice(0, 3), store, now, fetchImpl); }
+  catch (err) { return { route: null, routeNote: err.message }; }
+  const r = routes?.[cs];
+  if (!r) return { route: null, routeNote: `No known route for ${cs}.` };
+  const [fromIcao, toIcao] = r.split("-");
+  const A = airportByIcao(fromIcao), B = airportByIcao(toIcao);
+  const route = { callsign: cs, fromIcao, toIcao, from: A?.iata || null, to: B?.iata || null, source: VRS };
+  const p = { lat: ac.lat, lon: ac.lon };
+  const posA = A && Number.isFinite(A.lat) ? A : null, posB = B && Number.isFinite(B.lat) ? B : null;
+  if (!posA || !posB || !Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return { route: null, routeNote: `${cs} usually flies ${fromIcao}–${toIcao}, but it can't be checked against the aircraft's position.` };
+  const atAirport = distNm(p, posA) <= ROUTE_NEAR_AIRPORT_NM || distNm(p, posB) <= ROUTE_NEAR_AIRPORT_NM;
+  if (!atAirport && !onRoute(p, posA, posB).ok) return { route: null, routeNote: `${cs} usually flies ${route.from || fromIcao}–${route.to || toIcao}, but the aircraft is not on that line, so the route is not shown.` };
+  return { route, routeNote: null };
+}

@@ -201,6 +201,12 @@ export async function fetchFlightStatus(number, dateLocal, key, { fetchImpl = fe
   return { flights: Array.isArray(json) ? json : [], usage };
 }
 
+// Flights of one aircraft (by registration) departing or arriving on a local date (Tier 2, 2 units).
+export async function fetchAircraftFlights(reg, dateLocal, key, { fetchImpl = fetch } = {}) {
+  const { json, usage } = await request(`/flights/reg/${encodeURIComponent(reg)}/${dateLocal}?dateLocalRole=Both&withAircraftImage=false&withLocation=false`, key, fetchImpl);
+  return { flights: Array.isArray(json) ? json : [], usage };
+}
+
 // RapidAPI reports the remaining quota in x-ratelimit-* headers (names vary by plan).
 function rateHeaders(headers) {
   const out = {};

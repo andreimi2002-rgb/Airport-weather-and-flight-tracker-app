@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -529,6 +529,11 @@ function endCard(title, m, f, isDep) {
 }
 const fieldHtml = (label, value, mono) => `<div class="field"><small>${label}</small><strong class="${value === NA || value == null ? "na" : mono ? "mono" : ""}">${esc(value ?? NA)}</strong></div>`;
 
+// The registration links to the aircraft's own page.
+const regField = reg => (reg && reg !== NA
+  ? `<div class="field"><small>REGISTRATION</small><strong class="mono"><a class="reg-link" href="${esc(aircraftPath(reg))}">${esc(reg)} <span aria-hidden="true">→</span></a></strong></div>`
+  : fieldHtml("REGISTRATION", NA));
+
 function renderFlightDrawer() {
   if (!fd) return;
   const f = fd.flight, a = fd.aircraft, now = Date.now();
@@ -613,7 +618,7 @@ function renderFlightDrawer() {
 
     <div class="fd-sec"><h3>Aircraft <small>${esc(fd.aircraftNote)}</small></h3>
       <div class="ac"><div class="plane-photo${photoHtml ? "" : " no-photo"}">${photoHtml}<span class="photo-note">${noteHtml}</span></div>
-      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", fd.reg || f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
+      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${regField(fd.reg || f.aircraft.registration || af.acReg)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
       ${fd.live ? `<div class="fd-sub"><h4>Live now <small>${esc(fd.live.callsign || "")} · seen ${esc(relative(fd.live.seenAt))}</small></h4><div class="grid3">${liveFields(fd.live).map(([k, v]) => fieldHtml(k, v)).join("")}</div><div class="note">Live ADS-B data: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL).</div></div>` : ""}
     </div>
 
@@ -827,8 +832,10 @@ function renderPicker() {
   const q = $("airportSearch").value;
   let html = "";
   if (q.trim()) {
-    pickerResults = searchAirports(index, q, 25);
-    html = pickerResults.length ? pickerResults.map(optionHtml).join("") : `<div class="option-empty">No airport matches "${esc(q)}".</div>`;
+    // A registration ("YR-ASA") also offers that aircraft's page, first.
+    const reg = asRegistration(q);
+    pickerResults = [...(reg ? [{ aircraft: reg }] : []), ...searchAirports(index, q, 25)];
+    html = pickerResults.length ? pickerResults.map((a, i) => (a.aircraft ? aircraftOptionHtml(a.aircraft, i) : optionHtml(a, i))).join("") : `<div class="option-empty">No airport matches "${esc(q)}".</div>`;
   } else {
     const saved = favorites().map(c => index.byIata.get(c)).filter(Boolean);
     const demo = demoAirportCodes.map(c => index.byIata.get(c)).filter(a => a && !saved.includes(a));
@@ -850,8 +857,10 @@ function highlightOption() {
   if (pickerActive >= 0) $("airportSearch").setAttribute("aria-activedescendant", "opt-" + pickerActive);
   else $("airportSearch").removeAttribute("aria-activedescendant");
 }
+const aircraftOptionHtml = (reg, i) => `<button class="airport-option" role="option" id="opt-${i}" data-i="${i}" aria-selected="false"><span class="ao-ic">✈</span><span class="ao-tx"><strong>Aircraft ${esc(reg)}</strong><small>Photo, details and where it is now</small></span><code>REG</code></button>`;
 function choose(a) {
   if (!a) return;
+  if (a.aircraft) { location.href = aircraftPath(a.aircraft); return; }
   lastFocus = $("chooseBtn");
   closeModal("airportModal");
   goTo(a);
