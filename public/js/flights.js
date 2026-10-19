@@ -144,6 +144,54 @@ export const fetchAircraftNow = reg => getJSON("/api/aircraft-now/" + encodeURIC
 // Its flights on one local date (AeroDataBox, 2 units): only when asked for.
 export const fetchAircraftFlights = (reg, date) => getJSON(`/api/aircraft-flights/${encodeURIComponent(reg)}/${date}`);
 
+// Aircraft flying to or from this airport now (adsb.lol + VRS routes). Free, stored 4 min.
+export const fetchAirportLive = iata => getJSON("/api/airport-live/" + encodeURIComponent(iata));
+
+// Board flights <- live aircraft around the airport. A pair is kept only when
+// it is unique both ways: the aircraft's route is this flight's route, the
+// airline matches (ICAO code, or an IATA code of that ICAO airline), the
+// flight's time fits (departures from 4 h ago to 1 h ahead, arrivals from
+// 1 h ago to 4 h ahead), and a registration on the board, if any, is the same.
+// Returns Map(flight id -> aircraft).
+const H = 3600 * 1000;
+// "KLM1377" for KL 1377 (leading zeros ignored).
+const noZeros = s => String(s || "").replace(/^0+/, "");
+const sameNumber = (f, ac) => {
+  const n = (String(f.number || "").match(/(\d+)\s*$/) || [])[1];
+  const tail = String(ac.callsign || "").slice(3);
+  return !!n && /^\d+$/.test(tail) && noZeros(tail) === noZeros(n);
+};
+export function matchBoardLive(flights, aircraft, code, now = Date.now()) {
+  const regNorm = r => String(r || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const claims = new Map();
+  for (const ac of aircraft || []) {
+    const dir = ac.from === code ? "departure" : ac.to === code ? "arrival" : null;
+    if (!dir) continue;
+    const otherCode = dir === "departure" ? ac.to : ac.from;
+    const cands = flights.filter(f => {
+      if (f.demo || f.direction !== dir || other(f).airport.iata !== otherCode) return false;
+      const boardReg = regNorm(f.aircraft?.registration);
+      if (boardReg && boardReg === regNorm(ac.registration)) return true;
+      const al = f.airline || {};
+      // Same airline, or the same flight number flown by a partner/subsidiary (LH 1654 as "LHX1654").
+      if (!(al.icao ? al.icao === ac.airlineIcao : (ac.airlineIata || []).includes(al.iata)) && !sameNumber(f, ac)) return false;
+      // The board names another aircraft (often a planned one; airlines swap
+      // aircraft): only a callsign that is exactly airline + this flight number overrides it.
+      if (boardReg && !sameNumber(f, ac)) return false;
+      const m = dir === "departure" ? f.departure : f.arrival;
+      const t = Date.parse((m.runway || m.revised || m.scheduled)?.utc);
+      if (!Number.isFinite(t)) return false;
+      return dir === "departure" ? t >= now - 4 * H && t <= now + H : t >= now - H && t <= now + 4 * H;
+    });
+    if (cands.length !== 1) continue;
+    const id = cands[0].id;
+    claims.set(id, [...(claims.get(id) || []), ac]);
+  }
+  const out = new Map();
+  for (const [id, list] of claims) if (list.length === 1) out.set(id, list[0]);
+  return out;
+}
+
 // "yr-asa " -> "YR-ASA"; null when it can't be a registration. Search also
 // needs a hyphen or a US "N" number, so airport codes and words don't match.
 export function asRegistration(s) {
@@ -238,7 +286,7 @@ export function liveFields(ac) {
 
 // Live data older than this no longer says where the aircraft is now.
 export const LIVE_FRESH_MS = 15 * 60 * 1000;
-const NEAR_AIRPORT_KM = 15, APPROACH_KM = 120;
+const NEAR_AIRPORT_KM = 15, APPROACH_KM = 120, TAXI_KT = 5;
 
 // What live ADS-B data says about this flight, or null when it can't say:
 // the identified aircraft on the ground at the destination (after departure
@@ -255,7 +303,12 @@ export function liveStatus(f, ac, from, to, now = Date.now()) {
   const base = { at: ac.seenAt, live: true };
   if (ac.onGround) {
     if (toKm !== null && toKm <= NEAR_AIRPORT_KM && now > depAt) return { ...base, label: "Landed (live data)", cls: "landed", key: "landed" };
-    if (fromKm !== null && fromKm <= NEAR_AIRPORT_KM && !(now > arrAt)) return { ...base, label: `On the ground at ${from.iata} (live data)`, cls: "boarding", key: "ground" };
+    // Moving on the ground at the origin: pushed back and taxiing (the provider may already say "Departed").
+    if (fromKm !== null && fromKm <= NEAR_AIRPORT_KM && !(now > arrAt)) {
+      return (ac.groundSpeedKt ?? 0) >= TAXI_KT
+        ? { ...base, label: `Taxiing at ${from.iata} (live data)`, cls: "boarding", key: "taxi" }
+        : { ...base, label: `On the ground at ${from.iata} (live data)`, cls: "boarding", key: "ground" };
+    }
     return null; // on the ground somewhere else: don't guess
   }
   const descending = Number.isFinite(ac.verticalRateFpm) && ac.verticalRateFpm <= -300;
