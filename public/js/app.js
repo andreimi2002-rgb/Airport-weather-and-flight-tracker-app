@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, notFoundMessage } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -666,7 +666,7 @@ async function lookupAircraft(f) {
     const dep = Date.parse((f.departure.revised || f.departure.scheduled)?.utc);
     const early = !AIRBORNE.includes(f.status) && f.status !== "arrived" && Number.isFinite(dep) && dep - Date.now() > 30 * 60000;
     fd.aircraftNote = early ? "Aircraft not known yet: it usually shows up in live data shortly before departure"
-      : "Aircraft not found in live ADS-B data" + (why ? ": " + why : "");
+      : notFoundMessage(f.aircraft.model, why);
     renderFlightDrawer();
     return;
   }

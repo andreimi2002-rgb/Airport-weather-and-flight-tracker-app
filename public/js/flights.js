@@ -186,3 +186,17 @@ export function liveFields(ac) {
   const vert = ac.onGround ? "—" : vr === null || vr === undefined ? NA : Math.abs(vr) < 300 ? "Level" : `${vr > 0 ? "Climbing" : "Descending"} ${Math.abs(Math.round(vr / 50) * 50).toLocaleString("en-US")} ft/min`;
   return [["ALTITUDE", alt], ["GROUND SPEED", spd], ["VERTICAL", vert]];
 }
+
+// Turboprops such as older ATR 72s often don't broadcast an ADS-B position,
+// so they are missing from open live data however good the matching is.
+const OFTEN_INVISIBLE = /\bATR\b|\bDash ?8\b|\bDHC-8\b|\bQ400\b|\bSaab 340\b|\bJetstream\b|\bDornier 328\b/i;
+
+// The drawer's message when the aircraft wasn't found. why: which step found nothing.
+// A failed service or used-up lookups keep their exact wording.
+export function notFoundMessage(model, why = "") {
+  const serviceProblem = /used up|unavailable|failed|adsb\.lol|GitHub|not in the open airline list|no airline code|not in our airport list/i.test(why);
+  if (OFTEN_INVISIBLE.test(String(model || "")) && !serviceProblem) {
+    return "Aircraft not visible in live ADS-B data (some aircraft, e.g. older ATR 72s, don't broadcast their position)";
+  }
+  return "Aircraft not found in live ADS-B data" + (why ? ": " + why : "");
+}
