@@ -18,11 +18,7 @@ Agreed with the owner on 2026-10-19. Work in this order, one branch and one prev
    - Anything not supplied shows "Not available".
    - Optional: a "Check this flight" button for the current status (2 units per press).
 2. **Missing photos rule**: when two Wikidata items share an airport's IATA and ICAO codes (civil airport plus an air base or a closed airport: Austin, Aalborg, Bergen, Timișoara), drop items that are dissolved or military air bases, and match only if exactly one is left.
-3. **Saved airports and board view (scope item 6)**:
-   - home airport and shortcuts between saved airports;
-   - a clean one-screen board for a desktop monitor, tablet or phone;
-   - fix the sideways-scrolling flight table on phones.
-4. **Weather panel**: clickable, with a detailed view (decoded TAF, more forecast hours, more fields).
+3. **Weather panel**: clickable, with a detailed view (decoded TAF, more forecast hours, more fields).
 
 ## Then, toward FlightAware (stages A–E)
 | Stage | What | Needs |
@@ -32,6 +28,12 @@ Agreed with the owner on 2026-10-19. Work in this order, one branch and one prev
 | C | Live map with aircraft positions | An ADS-B source (e.g. OpenSky, non-commercial only) and a map library; the owner must lift the "no map yet" rule first |
 | D | Alerts ("tell me when RO391 boards") and installable app (PWA) | AeroDataBox webhooks (paid per update) |
 | E | Statistics: airport delays, history | A paid plan or data collected over time |
+
+## Last (owner's choice, 2026-10-19)
+**Saved airports and board view (scope item 6)**:
+- home airport and shortcuts between saved airports;
+- a clean one-screen board for a desktop monitor, tablet or phone;
+- fix the sideways-scrolling flight table on phones (can be pulled forward on its own if the owner asks).
 
 Before stage C, the single-page app will likely need to move to React/Vite. Propose it only when the code actually needs it, and keep the design exactly as it is.
 
