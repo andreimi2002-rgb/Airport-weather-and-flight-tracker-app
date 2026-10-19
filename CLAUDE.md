@@ -64,6 +64,8 @@ Owner's choices so far: OurAirports for airports; mwgg for time zones; airport s
 
 Known gaps to revisit later (owner asked, not now): some airports have no airport or city photo (e.g. Timișoara TSR); some chosen photos look odd (satellite views, collages); Heathrow's only photo is GFDL (excluded); Dallas/Fort Worth has two cities so none is shown; on phones the flight table still scrolls sideways (planned for item 6).
 
+Later, after the other scope items (owner, 2026-10-19): improve the weather panel and make weather clickable to open a detailed view (e.g. decoded TAF, more forecast hours, more fields). Owner was happy with the item 3 version for now.
+
 In review (not merged yet):
 - Item 3 (branch `feature/weather`): `/api/weather/<IATA>` Netlify Function (`netlify/functions/weather.mjs`, logic in `netlify/lib/weather.mjs`). METAR/TAF from aviationweather.gov (no key; HTTP 204 = no report), forecast from MET Norway (owner's choice over Open-Meteo: commercial use allowed, CC BY 4.0, needs identifying User-Agent). No METAR station -> say so and show forecast labelled as forecast, never borrow another station. CDN cache 5 min (1 min if a part failed), rate limit 60/min/IP. Demo weather removed.
 
