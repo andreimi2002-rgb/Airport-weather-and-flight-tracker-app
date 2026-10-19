@@ -8,6 +8,7 @@ import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, tafGroups, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
 import { punctuality, hourlyTraffic, topBy, airlineKey, routeKey, aircraftKey, lateMinutes, flightProgress, relative, haversineKm, milestones } from "./insights.js";
 import { trafficSvg, forecastSvg } from "./charts.js";
+import { loadLogos, airlineBadge } from "./logos.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const NA = "Not available";
@@ -41,9 +42,8 @@ function setText(values) { for (const [id, v] of Object.entries(values)) $(id).t
 const favorites = () => store.get("favorites", []);
 const isFavorite = a => favorites().includes(a.iata);
 const fmtClock = (tz, d = new Date(), opts = {}) => new Intl.DateTimeFormat("en-GB", { timeZone: tz || "UTC", hour: "2-digit", minute: "2-digit", hour12: false, ...opts }).format(d);
-// Airline badge colour: a stable hue from the code (decoration only, not data).
-const hue = s => { let h = 0; for (const c of String(s || "?")) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
-const alBadge = f => { const c = f.airline?.iata || f.airline?.icao || (f.number || "").split(" ")[0] || "✈"; return `<span class="al" style="--h:${hue(c)}" aria-hidden="true">${esc(c.slice(0, 3))}</span>`; };
+// Airline logo, or the coloured code badge (logos.js).
+const alBadge = airlineBadge;
 const fmtNum = n => n.toLocaleString("en-US");
 // "+23m", "+1h 45m" for delay chips.
 const fmtDelay = min => { const a = Math.abs(min); return (min > 0 ? "+" : "−") + (a < 120 ? a + "m" : Math.floor(a / 60) + "h " + (a % 60) + "m"); };
@@ -962,4 +962,6 @@ window.addEventListener("popstate", () => {
 setInterval(updateClock, 1000);
 setInterval(() => { if (current && document.visibilityState === "visible") renderWeather(current, true); }, REFRESH_MS);
 
+// Logos arrive separately; the board shows code badges until then.
+loadLogos().then(() => { if (current) { renderFlights(); renderSide(); if (fd) renderFlightDrawer(); } });
 loadAirports();

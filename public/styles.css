@@ -587,3 +587,29 @@ body.wall{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow
   .wall-name{white-space:normal;font-size:15px}
   .wall-sub{white-space:normal}
 }
+
+/* ---------- airline logos (public/data/logos, Wikimedia Commons) ---------- */
+/* Same height as the code badge; wider logos get more room. A light backing
+   keeps dark logos readable on the dark theme. */
+.al.al-logo{box-sizing:border-box;width:auto;min-width:30px;max-width:78px;padding:3px 5px;background:#eef2f6;overflow:hidden}
+.al.al-logo img{display:block;height:100%;width:auto;max-width:100%;object-fit:contain}
+.fd-head .al.al-logo{max-width:120px;padding:5px 8px}
+.w-flight .al.al-logo{max-width:clamp(64px,6vw,110px)}
+@media(max-width:980px){.c-flight .al.al-logo{max-width:48px;padding:2px 3px}}
+/* Logo credits page */
+.credits h1{font-size:24px;letter-spacing:-.03em}
+.credits-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:16px}
+.credits-table th,.credits-table td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.credits-table th{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.credits-table a{color:#9fb1c2;overflow-wrap:anywhere}
+.credits .ghost{text-decoration:none}
+/* Fixed image heights (a % height doesn't resolve inside the badge's grid); width follows the logo. */
+.al.al-logo{display:flex;align-items:center;justify-content:center}
+.al.al-logo img{height:20px;max-height:none}
+.fd-head .al.al-logo img{height:32px}
+.w-flight .al.al-logo img{height:clamp(18px,1.7vw,30px)}
+@media(max-width:980px){.c-flight .al.al-logo img{height:14px}}
+.credits-table{table-layout:fixed}
+.credits-table td{overflow-wrap:anywhere}
+.credits-table th:first-child{width:46px}
+@media(max-width:760px){.credits-table{font-size:11px}.credits-table th,.credits-table td{padding:6px 4px}}
