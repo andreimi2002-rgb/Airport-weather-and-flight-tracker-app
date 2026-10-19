@@ -8,7 +8,8 @@
     "serve": "node scripts/serve.mjs",
     "build:airports": "node scripts/build-airports.mjs",
     "build:photos": "node scripts/build-photos.mjs",
-    "build:logos": "node scripts/build-logos.mjs"
+    "build:logos": "node scripts/build-logos.mjs",
+    "build:routes": "node scripts/build-routes.mjs"
   },
   "engines": {
     "node": ">=20"

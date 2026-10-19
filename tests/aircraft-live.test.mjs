@@ -101,7 +101,7 @@ test("live line", () => {
 });
 
 test("function: routes and input checks", async () => {
-  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/airport-live/:code", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"]);
+  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/airport-live/:code", "/api/airline-routes/:icao", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"]);
   let res = await handler(new Request("http://x/api/aircraft-photo/bad%20reg"), { params: { reg: "bad reg" } });
   assert.equal(res.status, 400);
   res = await handler(new Request("http://x/api/live/x"), { params: { callsign: "x" } });

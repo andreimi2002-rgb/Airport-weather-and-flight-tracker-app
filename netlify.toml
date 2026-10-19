@@ -28,3 +28,19 @@
   from = "/board/*"
   to = "/board.html"
   status = 200
+
+# Search pages: a route (/route/CDG-LAX), an airline (/airline/KLM), a flight (/flight/KL1377).
+[[redirects]]
+  from = "/route/*"
+  to = "/route.html"
+  status = 200
+
+[[redirects]]
+  from = "/airline/*"
+  to = "/airline.html"
+  status = 200
+
+[[redirects]]
+  from = "/flight/*"
+  to = "/flight.html"
+  status = 200

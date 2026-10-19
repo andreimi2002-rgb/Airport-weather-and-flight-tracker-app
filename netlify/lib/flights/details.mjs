@@ -51,11 +51,13 @@ export function getAircraft(reg, { key, store, now = Date.now(), fetchImpl, cap 
 
 // The flight with this number on this local date, seen from airport `here`
 // (the leg that departs from or arrives at it). Body: { status, flight|null, fetchedAt, ... }
+// here = null (the flight page, no airport chosen): every leg, as { flights: [...] }.
 export function getFlightStatus(number, dateLocal, here, { key, store, now = Date.now(), fetchImpl, cap = DEFAULT_MONTHLY_UNIT_CAP } = {}) {
   return cachedCall({
-    key, store, now, cap, units: UNITS.flightStatus, freshMs: STATUS_FRESH_MS, storeKey: `status/${number}/${dateLocal}/${here.iata}`,
+    key, store, now, cap, units: UNITS.flightStatus, freshMs: STATUS_FRESH_MS, storeKey: `status/${number}/${dateLocal}/${here?.iata || "-"}`,
     call: async () => {
       const { flights, usage } = await fetchFlightStatus(number, dateLocal, key, { fetchImpl });
+      if (!here) return { value: { flights: flights.map(f => normalizeFlight(f, "departure")) }, usage };
       const hereRef = { iata: here.iata, icao: here.icao || null, name: here.name || null, city: here.city || null, country: null };
       const dep = flights.find(f => f.departure?.airport?.iata === here.iata);
       const arr = flights.find(f => f.arrival?.airport?.iata === here.iata);
