@@ -4,6 +4,12 @@
   publish = "public"
   command = ""
 
+# Server-side code (weather today). esbuild bundles the airport list into
+# the function. Responses set their own cache headers in code.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 # Every airport has its own address, e.g. /airport/OTP.
 # The single page app reads the code from the URL.
 [[redirects]]
