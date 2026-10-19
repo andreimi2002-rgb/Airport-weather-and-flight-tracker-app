@@ -53,6 +53,8 @@ Implement items 1–3 with the design preserved, run checks, test airport switch
 
 Later (not now): installable PWA polish, alerts, Explorer layer, native widget, public launch licensing review.
 
+**Agreed order from here (2026-10-19), details in `docs/roadmap.md`:** item 5 (flight detail) → missing-photos rule (Austin, Aalborg, Bergen, Timișoara) → item 6 → clickable weather panel → stages A–E toward FlightAware (flight pages and search, aircraft pages, live map, alerts/PWA, statistics). Long-term goal: FlightAware-level features with the current design. Ask the owner before reordering.
+
 ## Progress and decisions (keep this updated after each item)
 Local copy of the repo: `C:\Users\stroe\Downloads\airport-live-repo` (open this folder in VS Code). Netlify site: `live-airport` (Deploy Previews come from pull requests; previews need Netlify team login). The `gh` CLI is not installed: push the branch and give the owner the `pull/new/<branch>` link.
 
