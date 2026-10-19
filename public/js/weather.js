@@ -65,3 +65,23 @@ export function localHour(isoTime, tz) {
 export const forecastSlots = (hours, count = 6) => (hours || []).filter((_, i) => i % 3 === 0).slice(0, count);
 
 export const fmtTemp = c => (c === null || c === undefined ? "—" : Math.round(c) + "°");
+
+// Splits a TAF into its change groups: the base forecast, FM, BECMG, TEMPO, PROB.
+export function tafGroups(raw) {
+  const body = stripType(raw).replace(/\s+/g, " ").trim();
+  const parts = body.split(/\s(?=FM\d{6}|BECMG\s|TEMPO\s|PROB\d{2}\s)/);
+  const day = (d, h, m = "00") => `${h}:${m} on the ${Number(d)}${["th","st","nd","rd"][(Number(d) % 100 - 20) % 10] || ["th","st","nd","rd"][Number(d) % 100] || "th"}`;
+  const hm = (h, m = "00") => `${h}:${m}`;
+  return parts.map((p, i) => {
+    let m;
+    if (i === 0) return { kind: "base", label: "Base forecast", text: p };
+    if ((m = /^FM(\d\d)(\d\d)(\d\d)\s(.*)$/.exec(p))) return { kind: "fm", label: `From ${day(m[1], m[2], m[3])} UTC`, text: m[4] };
+    if ((m = /^(PROB\d\d)?\s?(TEMPO|BECMG)?\s?(\d\d)(\d\d)\/(\d\d)(\d\d)\s(.*)$/.exec(p))) {
+      const what = m[2] === "BECMG" ? "Becoming" : m[2] === "TEMPO" ? "Temporarily" : "";
+      const prob = m[1] ? m[1].slice(4) + "% chance" : "";
+      return { kind: m[1] ? "prob" : m[2] === "TEMPO" ? "tempo" : "becmg", label: `${[prob, what].filter(Boolean).join(", ")} ${m[3] === m[5] ? `${hm(m[4])}–${day(m[5], m[6])}` : `${day(m[3], m[4])} – ${day(m[5], m[6])}`} UTC`.trim(), text: m[7] };
+    }
+    return { kind: "other", label: "", text: p };
+  });
+}
+
