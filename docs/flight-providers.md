@@ -45,6 +45,13 @@ Live updates (estimated/actual times, status, gates) exist only where AeroDataBo
 
 **Runner-up:** FlightAware AeroAPI Personal gives more boards for the money ($5 credit ≈ 250–500 boards) and strong US data. However, it has no aircraft photos, gives aircraft types only as codes, needs a card on file, and is restricted to personal or academic use.
 
+### Aircraft photos in AeroDataBox (checked in the API spec)
+- **On the board:** each flight's aircraft can include a photo at no extra cost. It is "either actual (if registration is provided) or approximate based on airline name and model", so it may show a sister aircraft. The app must label it "representative photo".
+- **By registration:** `GET /aircrafts/reg/{reg}/image/beta` (Tier 2, 2 units), or `GET /aircrafts/reg/{reg}?withImage=true` (Tier 1, 1 unit). The second also returns age, seats, delivery date, engine type and model.
+- **Licences:** only commercial-use licences are returned (CC BY, CC BY-SA, CC0, public domain, US government work). Each photo has author, title, source page and HTML attribution lines.
+- **Caveat:** photos are matched automatically, so "false matches may be returned". The app should show "matched automatically" and fall back to the styled panel when there is no photo.
+- **Quota:** look up aircraft only when a flight's details are opened; cache up to 7 days (the Basic plan's caching limit).
+
 **Not suitable:** aviationstack (100 requests and no schedules on the free plan), AirLabs (free plan has no live times, gates or status), OpenSky (no schedules or airline data), Flightradar24 (no free tier).
 
 ## What you would do (if you choose AeroDataBox)
