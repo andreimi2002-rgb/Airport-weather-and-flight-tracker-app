@@ -234,3 +234,17 @@ test("identify: if GitHub fails, an older stored route file is used; with none, 
   assert.equal(r.body.status, "error");
   assert.match(r.body.notice, /^Route data \(GitHub\)/);
 });
+
+test("type check: a swap within the family is fine, another family is a conflict", async () => {
+  const { typeConflicts, typeDiffers } = await import("../public/js/flights.js");
+  assert.equal(typeConflicts("A321", "Airbus A320"), false, "A321 for a planned A320: same family");
+  assert.equal(typeDiffers("A321", "Airbus A320"), true);
+  assert.equal(typeConflicts("A21N", "Airbus A320 NEO"), false);
+  assert.equal(typeConflicts("B38M", "Boeing 737-800"), false);
+  assert.equal(typeConflicts("E195", "Embraer 190"), false);
+  assert.equal(typeConflicts("B738", "Airbus A320"), true, "737 for an A320: conflict");
+  assert.equal(typeConflicts("AT76", "Airbus A320"), true);
+  assert.equal(typeConflicts("A320", "Airbus A320"), false);
+  assert.equal(typeDiffers("A320", "Airbus A320"), false);
+  assert.equal(typeConflicts("ZZZZ", "Airbus A320"), false, "unknown code: no conflict claimed");
+});

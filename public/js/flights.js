@@ -158,8 +158,18 @@ export const fetchIdentify = (airlineIcao, number, from, to, pos) =>
   getJSON(`/api/identify/${encodeURIComponent(airlineIcao)}/${encodeURIComponent(number)}/${from}/${to}/${pos.lat.toFixed(2)}/${pos.lon.toFixed(2)}`);
 
 // True when both sides name a type family and they differ (e.g. "A320" vs "Boeing 737-800").
+// The board often lists the planned type; airlines swap within a family
+// (an A321 instead of an A320), so only a different family is a conflict.
+const FAMILY_GROUP = { 318: "A320", 319: "A320", 320: "A320", 321: "A320", 170: "EJET", 175: "EJET", 190: "EJET", 195: "EJET", 42: "ATR", 72: "ATR", 200: "CRJ", 700: "CRJ", 900: "CRJ", 1000: "CRJ" };
+const group = n => FAMILY_GROUP[n] || String(n);
 export function typeConflicts(typeCode, boardModel) {
   const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
   const n = /(\d+)/.exec(String(boardModel || ""));
-  return !!fam && !!n && Number(n[1]) !== fam;
+  return !!fam && !!n && group(fam) !== group(Number(n[1]));
+}
+// True when the live aircraft is another type of the same family (e.g. A321 for a planned A320).
+export function typeDiffers(typeCode, boardModel) {
+  const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
+  const n = /(\d+)/.exec(String(boardModel || ""));
+  return !!fam && !!n && fam !== Number(n[1]) && !typeConflicts(typeCode, boardModel);
 }

@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, liveLine } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveLine } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -646,7 +646,7 @@ async function lookupAircraft(f) {
         const ac = body.aircraft;
         // Says exactly which step found nothing, so a screenshot shows the cause.
         if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
-        else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, not a ${f.aircraft.model}`;
+        else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, a different family from the scheduled ${f.aircraft.model}`;
         else if (body.status !== "ok") why = body.notice || "live data unavailable";
         else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
         else if (body.airlineUnknown) why = `the airline code ${icao} is not in the open airline list`;
@@ -687,7 +687,8 @@ async function lookupAircraft(f) {
   fd.aircraft = a || onlyReg(reg);
   if (real) { fd.photo = real; fd.photoKind = "planespotters"; }
   else if (a?.photo) { fd.photo = a.photo; fd.photoKind = "this-aircraft"; }
-  fd.aircraftNote = [regFrom === "adsb" ? "Registration from live ADS-B (adsb.lol)" : null, detNote].filter(Boolean).join(" · ");
+  const swapped = regFrom === "adsb" && fd.live && typeDiffers(fd.live.typeCode, f.aircraft.model) ? `operated by a ${fd.live.typeCode} (the schedule lists ${f.aircraft.model})` : null;
+  fd.aircraftNote = [regFrom === "adsb" ? "Registration from live ADS-B (adsb.lol)" : null, swapped, detNote].filter(Boolean).join(" · ");
   renderFlightDrawer();
 }
 
