@@ -16,6 +16,8 @@ createServer(async (req, res) => {
   const routes = [
     [/^\/api\/(weather|flights)\/([^/]+)$/, m => [m[1], { code: m[2] }]],
     [/^\/api\/aircraft\/([^/]+)$/, m => ["flight-details", { reg: m[1] }]],
+    [/^\/api\/aircraft-photo\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
+    [/^\/api\/live\/([^/]+)$/, m => ["aircraft-live", { callsign: m[1] }]],
     [/^\/api\/flight-status\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2], code: m[3] }]],
   ];
   const hit = routes.map(([re, to]) => { const m = re.exec(path); return m && to(m); }).find(Boolean);
