@@ -89,7 +89,7 @@ export function normalizeFlight(raw, direction, hereAirport = null) {
     distanceKm: typeof raw.greatCircleDistance?.km === "number" ? Math.round(raw.greatCircleDistance.km) : null,
     scheduledDurationMinutes: departure.scheduled && arrival.scheduled ? minutesBetween(departure.scheduled, arrival.scheduled) : null,
     isCargo: raw.isCargo === true,
-    aircraft: { registration: str(raw.aircraft?.reg), model: str(raw.aircraft?.model), modeS: str(raw.aircraft?.modeS), photo: photoOf(raw.aircraft?.image) },
+    aircraft: { registration: str(raw.aircraft?.reg), model: str(raw.aircraft?.model), manufacturer: manufacturerOf(raw.aircraft?.model), modeS: str(raw.aircraft?.modeS), photo: photoOf(raw.aircraft?.image) },
     updatedAt: str(raw.lastUpdatedUtc),
   };
 }

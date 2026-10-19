@@ -1,6 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { boardStats, DELAY_THRESHOLD_MIN } from "./flight-model.js";
+import { loadAircraftTypes, findType } from "./aircraft-types.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
@@ -357,7 +358,7 @@ function fillFlight(f) {
   const otherEnd = other(f), otherTime = otherEnd.revised || otherEnd.scheduled;
   const otherKind = otherEnd.revised ? "estimated or actual" : "scheduled";
   const otherWhere = otherEnd.airport.iata || placeName(otherEnd.airport);
-  $("detailTiming").textContent = `Scheduled ${hhmm(h.scheduled)} · ${up.note} ${up.time} · local airport time` + (otherTime && !f.demo ? ` · ${f.direction === "departure" ? "Arrival at" : "Departure from"} ${otherWhere}: ${hhmm(otherTime)} local time (${otherKind})` : "");
+  $("detailTiming").textContent = `Scheduled ${hhmm(h.scheduled)} · ${up.time === "—" ? "No update yet" : up.note + " " + up.time} · local airport time` + (otherTime && !f.demo ? ` · ${f.direction === "departure" ? "Arrival at" : "Departure from"} ${otherWhere}: ${hhmm(otherTime)} local time (${otherKind})` : "");
   const dur = fmtDuration(f.scheduledDurationMinutes);
   $("detailNote").textContent = [
     `Great-circle distance: ${f.distanceKm !== null ? f.distanceKm.toLocaleString("en-US") + " km" : NA}`,
@@ -365,10 +366,27 @@ function fillFlight(f) {
   ].join(" · ") + (f.demo ? ". Sample values (demo data)." : ".");
 }
 
-// kind: "this-aircraft" (found by registration), "representative" (board photo), "demo", or no photo.
-function setPlanePhoto(p, kind, f) {
+// Which photo wins: the actual aircraft, then AeroDataBox's airline/model photo,
+// then the Wikimedia photo of the aircraft type, then none.
+const PHOTO_RANK = { none: 0, type: 1, representative: 2, "this-aircraft": 3, demo: 3 };
+let photoRank = 0;
+
+// kind: "this-aircraft" (found by registration), "representative" (board photo),
+// "type" (Wikimedia photo of the aircraft type; typeName), "demo", or no photo.
+function setPlanePhoto(p, kind, f, typeName) {
   const box = $("planePhoto").parentElement, img = $("planePhoto"), note = $("planePhotoNote");
-  img.onerror = () => { box.classList.add("no-photo"); note.textContent = "Photo couldn't be loaded"; };
+  photoRank = p || kind === "demo" ? PHOTO_RANK[kind] : 0;
+  if (kind === "type" && p) {
+    box.classList.remove("no-photo");
+    img.onerror = () => { box.classList.add("no-photo"); note.textContent = "Photo couldn't be loaded"; photoRank = 0; };
+    img.src = p.src;
+    img.alt = "Representative photo of a " + typeName + ", not this aircraft";
+    const by = [p.author, p.licence].filter(Boolean).map(esc).join(" · ");
+    note.innerHTML = `Representative photo · ${esc(typeName)} · not this aircraft · ${p.page ? `<a href="${esc(p.page)}" target="_blank" rel="noopener">${by || "Wikimedia Commons"}</a>` : by} · Wikimedia Commons`;
+    return;
+  }
+  // A dead link frees the slot for the aircraft type photo (which itself does not retry).
+  img.onerror = () => { box.classList.add("no-photo"); note.textContent = "Photo couldn't be loaded"; photoRank = 0; if (!f.demo) tryTypePhoto(f, openedAircraft?.model || f.aircraft.model); };
   if (kind === "demo") {
     box.classList.remove("no-photo");
     img.src = demoAircraftPhoto;
@@ -394,6 +412,15 @@ function setPlanePhoto(p, kind, f) {
     img.alt = "Representative photo of a " + (f.aircraft.model || "similar aircraft");
     note.innerHTML = `Representative photo · may not be this aircraft${credit}`;
   }
+}
+
+// Wikimedia photo of the aircraft type, only if nothing better is shown.
+async function tryTypePhoto(f, model) {
+  if (!model || photoRank >= PHOTO_RANK.type) return;
+  const data = await loadAircraftTypes();
+  if (openedFlight !== f || photoRank >= PHOTO_RANK.type) return;
+  const t = findType(data, model);
+  if (t) setPlanePhoto(t.photo, "type", f, t.name);
 }
 
 const LOOKING = "Looking up…";
@@ -426,6 +453,7 @@ async function lookupAircraft(f) {
   openedAircraft = a;
   applyAircraft(a);
   if (a.photo) setPlanePhoto(a.photo, "this-aircraft", f);
+  else tryTypePhoto(f, a.model || f.aircraft.model);
 }
 
 function openFlight(f, opener) {
@@ -434,6 +462,7 @@ function openFlight(f, opener) {
   openedAircraft = null;
   fillFlight(f);
   setPlanePhoto(f.aircraft.photo, f.demo ? "demo" : "representative", f);
+  if (!f.demo) tryTypePhoto(f, f.aircraft.model);
   $("checkRow").hidden = !!f.demo;
   $("checkFlightBtn").disabled = false;
   $("checkFlightNote").textContent = "Uses about 1% of the monthly free allowance.";

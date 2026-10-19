@@ -11,7 +11,7 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 - Airport and city photos from Wikimedia Commons for about half of all airports (most large airports), each with author, licence and a link to the original. Airports without a freely licensed photo show a styled panel. A photo that fails to load also falls back to that panel.
 - Live weather for every airport: the latest METAR (decoded into wind, visibility, ceiling, conditions and a plain-English reading) and TAF from aviationweather.gov, and a forecast for the next hours from MET Norway. Airports without a reporting METAR station say so and show only the forecast, labelled as a forecast. The weather refreshes every 10 minutes while the page is open; if a refresh fails, the last data stays visible with a warning and its time. METARs older than 90 minutes are flagged.
 
-- Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies; everything else says "Not available". When the registration is known, opening a flight looks up that aircraft (exact model, manufacturer, age, seats, engines, delivery date, operator, and a photo of that aircraft labelled "matched automatically"). A "Check this flight" button asks for the current status of that one flight. Flights whose time passed without any provider update say "No recent update". "Last updated" shows when the board was fetched; old data is labelled.
+- Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies; everything else says "Not available". When the registration is known, opening a flight looks up that aircraft (exact model, manufacturer, age, seats, engines, delivery date, operator, and a photo of that aircraft labelled "matched automatically"). A "Check this flight" button asks for the current status of that one flight. Flights whose time passed without any provider update say "No recent update". When the actual aircraft is unknown, a representative photo of the aircraft type from Wikimedia Commons is shown instead, labelled "Representative photo · <type> · not this aircraft" with author and licence. "Last updated" shows when the board was fetched; old data is labelled.
 
 ## Still demo data (clearly labelled in the app)
 - Flights, only while no AeroDataBox key is set: sample board for SEA. Other airports say flight data is not connected yet.
@@ -37,6 +37,12 @@ npm run build:photos
 ```
 Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport, reads author and licence from Wikimedia Commons, keeps only public domain / CC0 / CC BY / CC BY-SA photos (no maps or logos, at least 800 px wide), checks that every photo link loads, and writes `public/data/photos/*.json`. Airports with ambiguous Wikidata matches are skipped instead of guessed.
 
+## Refresh the aircraft type photos
+```
+npm run build:aircraft-photos
+```
+Takes about 5–10 minutes. Reads aircraft types (aircraft models, families and airliners whose name starts with a known maker) from Wikidata, applies the same photo rules as the airport photos, checks every link, and writes `public/data/aircraft-types.json`. A name shared by two types goes to the type whose exact label it is; a real tie is dropped. Ownership is decided among all types, so an alias never takes a name whose real owner has no photo.
+
 ## Project layout
 - `public/` — the site Netlify publishes (`index.html`, `styles.css`, `js/`, `data/airports.json`, `data/photos/`)
 - `public/js/airports.js` — airport search, lookup and URL handling
@@ -44,6 +50,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `public/js/weather.js` — loads weather from `/api/weather/<IATA>` and formats it
 - `public/js/flights.js` — loads flights from `/api/flights/<IATA>` and formats them
 - `public/js/flight-model.js` — the normalized Flight/Aircraft model and status rules (shared with the tests)
+- `public/js/aircraft-types.js` — aircraft type name matching and loading of `data/aircraft-types.json` (shared with the build script)
 - `public/js/demo-data.js` — demo flights (SEA), used only while no flight key is set
 - `public/js/app.js` — page logic
 - `netlify/functions/weather.mjs` — the `/api/weather/<IATA>` function: input check, airport lookup, cache headers, rate limit
@@ -56,7 +63,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `netlify/lib/flights/board.mjs` — stored boards, monthly budget, stale and quota states
 - `netlify/lib/airports.mjs` — airport lookup shared by the functions
 - `docs/flight-providers.md` — provider comparison and why AeroDataBox
-- `scripts/` — airport and photo data builders, local server
+- `scripts/` — airport, photo and aircraft type photo builders (`scripts/lib/wikimedia.mjs` holds the shared Wikidata/Commons helpers), local server
 - `tests/` — tests (`node --test`)
 - `netlify.toml` — publish folder, functions folder and the `/airport/*` address rule
 
@@ -70,6 +77,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 | [NOAA Aviation Weather Center](https://aviationweather.gov/data/api/) | METAR and TAF | US government data, public domain |
 | [MET Norway](https://api.met.no/) | Forecast (Locationforecast 2.0) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), credited in the app |
 | [AeroDataBox](https://aerodatabox.com/) via RapidAPI | Flights, aircraft model/registration, representative aircraft photos | Basic plan: non-commercial, attribution required (shown on the board) |
+| [Wikidata](https://www.wikidata.org) + [Wikimedia Commons](https://commons.wikimedia.org) | Representative aircraft type photos | Per photo, shown in the app |
 | [Unsplash](https://unsplash.com) | One illustrative aircraft photo (demo flight detail) | Unsplash licence |
 
 ### Weather function
