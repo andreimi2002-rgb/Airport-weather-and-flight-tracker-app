@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, callsignFor, typeConflicts, liveLine } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, liveLine } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -640,7 +640,7 @@ async function lookupAircraft(f) {
     else if (!reg && (!from || !to)) why = "one of the airports is not in our airport list";
     if (!reg && icao && from && to) {
       try {
-        const body = await fetchIdentify(icao, from.iata, to.iata, estimatedPosition(f, from, to));
+        const body = await fetchIdentify(icao, flightDigits(f), from.iata, to.iata, estimatedPosition(f, from, to));
         if (fd?.flight !== f) return;
         const ac = body.aircraft;
         // Says exactly which step found nothing, so a screenshot shows the cause.

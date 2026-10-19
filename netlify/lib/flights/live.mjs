@@ -156,7 +156,7 @@ export function normalizeRoute(json) {
   return m ? { from: m[1], to: m[2], airline: str(json.airline_code), plausible: json.plausible !== false } : null;
 }
 
-// q: { airline: "WMT", from: "MXP", to: "OTP", lat, lon } (position where the flight should be now)
+// q: { airline: "WMT", number: "3185" | null, from: "MXP", to: "OTP", lat, lon } (position where the flight should be now)
 export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = fetch, dailyCap = DEFAULT_ADSB_DAILY_CAP } = {}) {
   const lat = Math.round(q.lat * 2) / 2, lon = Math.round(q.lon * 2) / 2; // 0.5° grid: nearby lookups share one answer
   try {
@@ -167,7 +167,9 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
     // This airline's aircraft, nearest to where the flight should be first.
     const d2 = a => ((a.lat ?? lat) - q.lat) ** 2 + ((a.lon ?? lon) - q.lon) ** 2;
     const airlineAll = near.filter(a => a.callsign.toUpperCase().startsWith(q.airline));
-    const mine = [...airlineAll].sort((x, y) => d2(x) - d2(y)).slice(0, MAX_ROUTE_LOOKUPS);
+    // An aircraft whose callsign is exactly the airline's ICAO code + our flight number (LO 646 -> LOT646) is checked first.
+    const exact = q.number ? q.airline + q.number : null;
+    const mine = [...airlineAll].sort((x, y) => (y.callsign === exact) - (x.callsign === exact) || d2(x) - d2(y)).slice(0, MAX_ROUTE_LOOKUPS);
     const seen = [];
     const matches = [];
     for (const a of mine) {
@@ -178,6 +180,8 @@ export async function identifyFlight(q, { store, now = Date.now(), fetchImpl = f
       });
       seen.push({ callsign: a.callsign, route: route ? route.from + "-" + route.to : null });
       if (route && route.plausible && route.from === q.from && route.to === q.to) matches.push({ ...a, route });
+      // Callsign = our flight number and no known route saying otherwise: the same flight.
+      else if (!route && a.callsign === exact) matches.push({ ...a, route: { from: q.from, to: q.to, airline: q.airline, plausible: true, byNumber: true } });
     }
     // Exactly one aircraft of this airline on exactly this route; anything else is not trusted.
     return { body: base("ok", { fetchedAt: new Date(now).toISOString(), aircraft: matches.length === 1 ? matches[0] : null, nearby: near.length, airlineNearby: airlineAll.length, candidates: mine.length, checked: seen, matches: matches.length, source: ADSBLOL }), cacheSeconds: 120 };

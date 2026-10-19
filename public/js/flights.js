@@ -152,8 +152,10 @@ export function liveLine(ac) {
 }
 
 // The aircraft of this airline flying exactly this route near pos (adsb.lol).
-export const fetchIdentify = (airlineIcao, from, to, pos) =>
-  getJSON(`/api/identify/${encodeURIComponent(airlineIcao)}/${from}/${to}/${pos.lat.toFixed(2)}/${pos.lon.toFixed(2)}`);
+// number: the digits of the flight number ("W4 0346" -> "346"), or "-" when unknown.
+export const flightDigits = f => /^\S+\s+0*(\d{1,4}[A-Z]?)$/.exec(String(f.number || "").trim().toUpperCase())?.[1] || "-";
+export const fetchIdentify = (airlineIcao, number, from, to, pos) =>
+  getJSON(`/api/identify/${encodeURIComponent(airlineIcao)}/${encodeURIComponent(number)}/${from}/${to}/${pos.lat.toFixed(2)}/${pos.lon.toFixed(2)}`);
 
 // True when both sides name a type family and they differ (e.g. "A320" vs "Boeing 737-800").
 export function typeConflicts(typeCode, boardModel) {

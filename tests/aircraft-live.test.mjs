@@ -101,7 +101,7 @@ test("live line", () => {
 });
 
 test("function: routes and input checks", async () => {
-  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/live/:callsign", "/api/identify/:airline/:from/:to/:lat/:lon"]);
+  assert.deepEqual(config.path, ["/api/aircraft-photo/:reg", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"]);
   let res = await handler(new Request("http://x/api/aircraft-photo/bad%20reg"), { params: { reg: "bad reg" } });
   assert.equal(res.status, 400);
   res = await handler(new Request("http://x/api/live/x"), { params: { callsign: "x" } });
@@ -147,4 +147,30 @@ test("estimated position follows the route by the flight's own times", async () 
   assert.ok(Math.abs(end.lat - 39.49) < 1e-6 && Math.abs(end.lon + 0.48) < 1e-6, "after arrival: at the destination");
   const mid = greatCirclePoint(OTPc, VLCc, 0.5);
   assert.ok(mid.lat > 39.49 && mid.lat < 46 && mid.lon > -0.48 && mid.lon < 26.08, JSON.stringify(mid));
+});
+
+test("callsign equal to airline ICAO + our flight number counts even when the route is unknown", async () => {
+  const { identifyFlight } = await import("../netlify/lib/flights/live.mjs");
+  const near = { ac: [
+    { flight: "LOT646  ", r: "SP-LVT", t: "B38M", alt_baro: 3375, gs: 200, lat: 44.6, lon: 26.0 },
+    { flight: "LOT4JH  ", r: "SP-LND", t: "E195", alt_baro: 36000, gs: 450, lat: 45.5, lon: 24.0 },
+  ] };
+  const f = async url => url.includes("/v2/point/") ? ok(near) : new Response("Internal Server Error", { status: 500 });
+  let r = await identifyFlight({ airline: "LOT", number: "646", from: "WAW", to: "OTP", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft.registration, "SP-LVT");
+  assert.equal(r.body.aircraft.route.byNumber, true);
+  r = await identifyFlight({ airline: "LOT", number: "647", from: "OTP", to: "WAW", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: f });
+  assert.equal(r.body.aircraft, null, "a different number is not this flight");
+  // A known route that contradicts wins over the number.
+  const g = async url => url.includes("/v2/point/") ? ok(near) : ok({ _airport_codes_iata: "WAW-CLJ", plausible: true });
+  r = await identifyFlight({ airline: "LOT", number: "646", from: "WAW", to: "OTP", lat: 44.57, lon: 26.08 }, { store: memoryStore(), now: NOW, fetchImpl: g });
+  assert.equal(r.body.aircraft, null);
+});
+
+test("flight number digits for the identify request", async () => {
+  const { flightDigits } = await import("../public/js/flights.js");
+  assert.equal(flightDigits({ number: "LO 646" }), "646");
+  assert.equal(flightDigits({ number: "W4 0346" }), "346");
+  assert.equal(flightDigits({ number: "BA 48A" }), "48A");
+  assert.equal(flightDigits({ number: "—" }), "-");
 });
