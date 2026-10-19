@@ -10,17 +10,10 @@ export const demoWeather = {
   JFK: { temp: 18, condition: "Clear", icon: "☀", wind: "NW 8 kt", visibility: "10 km", ceiling: "Clear", metar: "KJFK 191151Z 31008KT 10SM CLR 18/08 A3010", metarText: "Northwesterly wind at 8 knots. Excellent visibility with clear skies in this sample." },
 };
 
-// Photos used by the prototype. None of them shows the actual airport,
-// so captions say "illustrative". The old "Bucharest" city photo showed
-// Tbilisi, Georgia, and was removed. Verified, credited photos come later.
-const unsplash = (id, w) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=85`;
-export const demoPhotos = {
-  SEA: { airport: unsplash("1436491865332-7a61a109cc05", 1400), city: unsplash("1502175353174-a7a70e73b362", 1100), cityCaption: "Seattle skyline · illustrative photo" },
-  LHR: { airport: unsplash("1569154941061-e231b4725ef1", 1400), city: unsplash("1513635269975-59663e0ac1ad", 1100), cityCaption: "London cityscape · illustrative photo" },
-  OTP: { airport: unsplash("1436491865332-7a61a109cc05", 1400) },
-  JFK: { airport: unsplash("1569154941061-e231b4725ef1", 1400), city: unsplash("1518391846015-55a9cc003b25", 1100), cityCaption: "New York skyline · illustrative photo" },
-};
-export const demoAircraftPhoto = unsplash("1436491865332-7a61a109cc05", 1000);
+// Illustrative aircraft photo for the demo flight detail (not the actual
+// aircraft; labelled as such). Airport and city photos now come from
+// Wikimedia Commons, see photos.js.
+export const demoAircraftPhoto = "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1000&q=85";
 
 // The four airports suggested in the picker before the user types.
 export const demoAirportCodes = ["SEA", "LHR", "OTP", "JFK"];

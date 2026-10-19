@@ -28,3 +28,7 @@ body{min-height:100vh}
 .primary{white-space:nowrap}
 @media(max-width:600px){#airportModal{align-items:start;padding-top:16px}}
 @media(max-width:420px){.brandline{display:none}.primary{padding:10px 12px}}
+/* Photo credits */
+.photo-label span{display:block;line-height:1.45}
+.photo-label a{color:inherit;text-decoration:underline;text-decoration-color:#ffffff59;text-underline-offset:2px}
+.photo-label a:hover{text-decoration-color:currentColor}

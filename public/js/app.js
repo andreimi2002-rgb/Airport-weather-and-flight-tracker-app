@@ -1,5 +1,6 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
-import { demoWeather, demoPhotos, demoAircraftPhoto, demoFlights, demoAirportCodes, flightStats } from "./demo-data.js";
+import { demoWeather, demoAircraftPhoto, demoFlights, demoAirportCodes, flightStats } from "./demo-data.js";
+import { getPhotos, creditHtml } from "./photos.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const $ = id => document.getElementById(id);
@@ -107,20 +108,42 @@ function showAirport(a) {
   renderFlights();
 }
 
-function setPhoto(card, img, url, alt, code) {
+// Shows a photo with its credit, or the styled panel with a short note.
+function setPhoto(which, photo, alt, code, note) {
+  const card = $(which + "PhotoCard"), img = $(which + "Photo"), caption = $(which + "PhotoCaption");
   card.dataset.code = code;
-  card.classList.toggle("no-photo", !url);
-  img.onerror = () => card.classList.add("no-photo");
+  card.classList.toggle("no-photo", !photo);
   img.onload = () => card.classList.remove("no-photo");
-  if (url) { img.src = url; img.alt = alt; } else { img.removeAttribute("src"); img.alt = ""; }
+  img.onerror = () => { card.classList.add("no-photo"); caption.textContent = "Photo couldn't be loaded"; };
+  if (photo) {
+    img.src = photo.src;
+    img.alt = alt;
+    caption.innerHTML = creditHtml(photo, esc);
+  } else {
+    img.removeAttribute("src");
+    img.alt = "";
+    caption.textContent = note;
+  }
 }
 
-function renderPhotos(a) {
-  const p = demoPhotos[a.iata] || {};
-  setPhoto($("airportPhotoCard"), $("airportPhoto"), p.airport, "Illustrative aviation photo", a.iata);
-  setPhoto($("cityPhotoCard"), $("cityPhoto"), p.city, (a.city || "City") + " · illustrative photo", a.iata);
-  $("airportPhotoCaption").textContent = p.airport ? "Illustrative photo · not this airport" : "No verified photo yet";
-  $("cityPhotoCaption").textContent = p.city ? p.cityCaption : "No verified photo yet";
+async function renderPhotos(a) {
+  setPhoto("airport", null, "", a.iata, "Loading photo…");
+  setPhoto("city", null, "", a.iata, "Loading photo…");
+  let p;
+  try {
+    p = await getPhotos(a.iata);
+  } catch (err) {
+    console.error("Photo list failed to load", err);
+    if (current !== a) return;
+    setPhoto("airport", null, "", a.iata, "Photo list couldn't be loaded");
+    setPhoto("city", null, "", a.iata, "Photo list couldn't be loaded");
+    return;
+  }
+  if (current !== a) return; // user already switched airport
+  const cityName = p.city?.name || a.city;
+  $("cityPhotoTitle").textContent = cityName || "City not listed";
+  setPhoto("airport", p.airport, "Photo of " + a.name, a.iata, "No freely licensed photo found");
+  setPhoto("city", p.city?.photo, "Photo of " + cityName, a.iata, cityName ? "No freely licensed photo found" : "");
 }
 
 function renderWeather(a) {

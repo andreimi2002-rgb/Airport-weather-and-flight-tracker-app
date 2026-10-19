@@ -1,0 +1,31 @@
+{
+ "version": 1,
+ "generated": "2026-10-19",
+ "counts": {
+  "airports": 5963,
+  "airportPhotos": 3796,
+  "cityPhotos": 4331,
+  "cityNames": 5045
+ },
+ "rejected": {
+  "too": 780,
+  "no": 85,
+  "licence": 241,
+  "type": 32
+ },
+ "linkProblems": {},
+ "sources": [
+  {
+   "name": "Wikidata",
+   "url": "https://www.wikidata.org",
+   "licence": "CC0",
+   "used": "Which photo and city belong to each airport"
+  },
+  {
+   "name": "Wikimedia Commons",
+   "url": "https://commons.wikimedia.org",
+   "licence": "Per photo (public domain, CC0, CC BY, CC BY-SA)",
+   "used": "Airport and city photos"
+  }
+ ]
+}

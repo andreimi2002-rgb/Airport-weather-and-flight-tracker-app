@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { demoFlights, demoWeather, demoPhotos, flightStats } from "../public/js/demo-data.js";
+import * as demo from "../public/js/demo-data.js";
+const { demoFlights, demoWeather, flightStats } = demo;
 
 test("demo flights exist only for SEA and all touch SEA", () => {
   assert.deepEqual(Object.keys(demoFlights), ["SEA"]);
@@ -21,7 +22,6 @@ test("demo weather only for the four prototype airports", () => {
   assert.deepEqual(Object.keys(demoWeather).sort(), ["JFK", "LHR", "OTP", "SEA"]);
 });
 
-test("wrong 'Bucharest' city photo (actually Tbilisi) is gone", () => {
-  assert.equal(demoPhotos.OTP.city, undefined);
-  assert.ok(!JSON.stringify(demoPhotos).includes("1565008576549"));
+test("no demo airport/city photos remain (they come from Wikimedia now)", () => {
+  assert.equal(demo.demoPhotos, undefined);
 });

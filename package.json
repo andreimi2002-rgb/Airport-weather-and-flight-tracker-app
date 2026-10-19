@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node --test",
     "serve": "node scripts/serve.mjs",
-    "build:airports": "node scripts/build-airports.mjs"
+    "build:airports": "node scripts/build-airports.mjs",
+    "build:photos": "node scripts/build-photos.mjs"
   },
   "engines": {
     "node": ">=20"
