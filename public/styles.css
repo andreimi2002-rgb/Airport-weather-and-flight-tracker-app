@@ -626,3 +626,60 @@ body.wall{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow
 .wall-row .w-new{display:block;font-size:.8em;color:var(--amber);font-weight:700}
 .wall-row .w-new.early{color:var(--green)}
 .wall-row.s-delayed .w-time b{color:inherit}
+
+/* ---------- universal search results ---------- */
+.ao-ic.ao-logo{background:#eef2f6;padding:3px}
+.ao-ic.ao-logo img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+.option-hint{padding:12px 16px;font-size:11px;color:var(--muted);border-top:1px solid var(--line)}
+
+/* ---------- route, airline and flight pages ---------- */
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.route-hero .route{margin-top:10px}
+.route-hero .rc a,.airline-hero a,.ra-name,.ar-row,.cs-chip{color:inherit;text-decoration:none}
+.route-actions{display:flex;justify-content:flex-end;margin-top:10px}
+.route-actions .ghost{text-decoration:none}
+.route-facts{margin-top:14px}
+.glance-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ra-row{display:grid;grid-template-columns:auto minmax(140px,220px) minmax(0,1fr);gap:14px;align-items:center;padding:12px 0;border-top:1px solid #1b2733}
+.ra-row:first-child{border-top:0}
+.ra-name{font-weight:700}
+.ra-name:hover,.cs-chip:hover,.ar-row:hover b{color:var(--accent)}
+.ra-codes{font:600 11px var(--mono);color:var(--muted);margin-top:3px}
+.ra-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cs-chip{font:600 11.5px var(--mono);padding:4px 8px;border-radius:7px;background:#111c27;border:1px solid #213242}
+.cs-more{font-size:11px;color:var(--muted);align-self:center}
+.rl-row{padding:12px 0;border-top:1px solid #1b2733;display:grid;gap:8px}
+.rl-row:first-child{border-top:0}
+.rl-id{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.rl-id b{font-size:15px}
+.rl-id a{color:var(--text)}
+.rl-id span{color:var(--muted);font-size:12px}
+.rl-row .status{justify-self:start}
+.airline-hero{display:flex;align-items:center;gap:22px;margin:6px 0 14px}
+.al-big{flex:none;width:clamp(120px,16vw,200px);height:clamp(64px,8vw,96px);border-radius:16px;background:#eef2f6;display:grid;place-items:center;padding:10px;box-sizing:border-box}
+.al-big img{max-width:100%;max-height:100%;object-fit:contain}
+.al-big .al{width:100%;height:100%;font-size:28px;border-radius:12px}
+.al-head h1{margin:6px 0 4px;font-size:clamp(26px,3.4vw,40px);letter-spacing:-.04em}
+.al-codes{font:600 13px var(--mono);color:var(--muted)}
+.al-codes b{color:var(--text)}
+.al-routes{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:2px 18px}
+.ar-row{display:grid;grid-template-columns:44px minmax(0,1fr) 16px 44px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:8px 0;border-bottom:1px solid #1b2733;font-size:12px}
+.ar-row span{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ar-row small{color:var(--dim);font-size:10px}
+.ar-row .ar-arrow{text-align:center}
+.flight-page .fd-head h2{margin:0;font:800 30px/1 var(--mono);letter-spacing:-.04em}
+.flight-page .fd-head .sub a{color:var(--muted)}
+.leg{padding-top:14px;margin-top:14px;border-top:1px solid #1b2733}
+.leg:first-child{border-top:0;margin-top:6px}
+.leg-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.leg-head span:not(.status){color:var(--muted);font-size:12px}
+.leg-head .status{margin-left:auto}
+@media(max-width:980px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+  .glance-2{grid-template-columns:1fr}
+  .ra-row{grid-template-columns:auto minmax(0,1fr);row-gap:8px}
+  .ra-chips{grid-column:1/-1}
+  .airline-hero{flex-direction:column;align-items:flex-start;gap:12px}
+  .al-routes{grid-template-columns:1fr}
+  .flight-page .fd-head h2{font-size:24px}
+}

@@ -9,6 +9,7 @@ import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stri
 import { punctuality, hourlyTraffic, topBy, airlineKey, routeKey, aircraftKey, lateMinutes, flightProgress, relative, haversineKm, milestones } from "./insights.js";
 import { trafficSvg, forecastSvg } from "./charts.js";
 import { loadLogos, airlineBadge } from "./logos.js";
+import { mountSearch } from "./search-ui.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const NA = "Not available";
@@ -26,8 +27,6 @@ let current = null;    // selected airport object
 let mode = "departures";
 let flightState = { kind: "loading", flights: [] };
 let weatherState = null; // last weather answer for the current airport
-let pickerResults = [];
-let pickerActive = -1;
 let lastFocus = null;
 
 // ---------- small helpers ----------
@@ -854,56 +853,20 @@ function closeDrawer(id) {
   }
 }
 
-// ---------- airport picker ----------
-function openPicker() {
-  if (!index) return;
-  $("airportSearch").value = "";
-  renderPicker();
-  openModal("airportModal", document.activeElement, $("airportSearch"));
-}
-function optionHtml(a, i) {
-  const sub = [a.city, a.country].filter(Boolean).join(", ");
-  const fav = isFavorite(a);
-  return `<button class="airport-option" role="option" id="opt-${i}" data-i="${i}" aria-selected="false"><span class="ao-ic${fav ? " fav" : ""}">${fav ? "★" : "✈"}</span><span class="ao-tx"><strong>${esc(a.name)}</strong><small>${esc(sub)}${a.icao ? " · " + esc(a.icao) : ""}${a.tz ? " · " + fmtClock(a.tz) + " local" : ""}</small></span><code>${esc(a.iata)}</code></button>`;
-}
-function renderPicker() {
-  const q = $("airportSearch").value;
-  let html = "";
-  if (q.trim()) {
-    // A registration ("YR-ASA") also offers that aircraft's page, first.
-    const reg = asRegistration(q);
-    pickerResults = [...(reg ? [{ aircraft: reg }] : []), ...searchAirports(index, q, 25)];
-    html = pickerResults.length ? pickerResults.map((a, i) => (a.aircraft ? aircraftOptionHtml(a.aircraft, i) : optionHtml(a, i))).join("") : `<div class="option-empty">No airport matches "${esc(q)}".</div>`;
-  } else {
+// ---------- search (airports, airlines, routes, flights, aircraft: search-ui.js) ----------
+const search = mountSearch({
+  button: $("chooseBtn"),
+  getIndex: () => index,
+  // Choosing an airport switches this page; everything else opens its own page.
+  onAirport: a => { goTo(a); showToast("Airport changed to " + a.iata); },
+  suggestions: () => {
     const saved = favorites().map(c => index.byIata.get(c)).filter(Boolean);
     const demo = demoAirportCodes.map(c => index.byIata.get(c)).filter(a => a && !saved.includes(a));
-    pickerResults = [...saved, ...demo];
-    if (saved.length) html += `<div class="option-group">Saved airports</div>` + saved.map(optionHtml).join("");
-    if (demo.length) html += `<div class="option-group">Suggested</div>` + demo.map((a, i) => optionHtml(a, i + saved.length)).join("");
-  }
-  $("airportOptions").innerHTML = html;
-  pickerActive = q.trim() && pickerResults.length ? 0 : -1;
-  highlightOption();
-}
-function highlightOption() {
-  $("airportOptions").querySelectorAll(".airport-option").forEach(el => {
-    const on = Number(el.dataset.i) === pickerActive;
-    el.classList.toggle("active", on);
-    el.setAttribute("aria-selected", on);
-    if (on) el.scrollIntoView({ block: "nearest" });
-  });
-  if (pickerActive >= 0) $("airportSearch").setAttribute("aria-activedescendant", "opt-" + pickerActive);
-  else $("airportSearch").removeAttribute("aria-activedescendant");
-}
-const aircraftOptionHtml = (reg, i) => `<button class="airport-option" role="option" id="opt-${i}" data-i="${i}" aria-selected="false"><span class="ao-ic">✈</span><span class="ao-tx"><strong>Aircraft ${esc(reg)}</strong><small>Photo, details and where it is now</small></span><code>REG</code></button>`;
-function choose(a) {
-  if (!a) return;
-  if (a.aircraft) { location.href = aircraftPath(a.aircraft); return; }
-  lastFocus = $("chooseBtn");
-  closeModal("airportModal");
-  goTo(a);
-  showToast("Airport changed to " + a.iata);
-}
+    return [{ title: "Saved airports", airports: saved }, { title: "Suggested", airports: demo }];
+  },
+  isFavorite,
+});
+const openPicker = search.open;
 
 // ---------- favourites ----------
 function updateFavorite() {
@@ -920,33 +883,11 @@ function updateFavorite() {
 }
 
 // ---------- events ----------
-$("chooseBtn").onclick = openPicker;
-$("closeModal").onclick = () => closeModal("airportModal");
 $("closeFlight").onclick = () => closeDrawer("flightModal");
 $("closeWeather").onclick = () => closeDrawer("weatherModal");
-$("airportModal").addEventListener("click", e => { if (e.target === $("airportModal")) closeModal("airportModal"); });
 for (const id of ["flightModal", "weatherModal"]) $(id).addEventListener("click", e => { if (e.target === $(id)) closeDrawer(id); });
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { closeModal("airportModal"); closeDrawer("flightModal"); closeDrawer("weatherModal"); return; }
-  const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName);
-  if (!typing && (e.key === "/" || (e.key === "k" && (e.metaKey || e.ctrlKey)))) { e.preventDefault(); openPicker(); }
-});
-$("airportSearch").addEventListener("input", renderPicker);
-$("airportSearch").addEventListener("keydown", e => {
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault();
-    if (!pickerResults.length) return;
-    const step = e.key === "ArrowDown" ? 1 : -1;
-    pickerActive = (pickerActive + step + pickerResults.length) % pickerResults.length;
-    highlightOption();
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    choose(pickerResults[pickerActive >= 0 ? pickerActive : 0]);
-  }
-});
-$("airportOptions").addEventListener("click", e => {
-  const btn = e.target.closest("[data-i]");
-  if (btn) choose(pickerResults[Number(btn.dataset.i)]);
+  if (e.key === "Escape") { closeDrawer("flightModal"); closeDrawer("weatherModal"); }
 });
 $("homeBtn").onclick = () => {
   if (!current) return;

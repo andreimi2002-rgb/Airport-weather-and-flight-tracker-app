@@ -19,6 +19,8 @@ createServer(async (req, res) => {
     [/^\/api\/aircraft-photo\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
     [/^\/api\/aircraft-now\/([^/]+)$/, m => ["aircraft-live", { reg: m[1] }]],
     [/^\/api\/airport-live\/([^/]+)$/, m => ["aircraft-live", { code: m[1] }]],
+    [/^\/api\/airline-routes\/([^/]+)$/, m => ["aircraft-live", { icao: m[1] }]],
+    [/^\/api\/flight-status\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2] }]],
     [/^\/api\/aircraft-flights\/([^/]+)\/([^/]+)$/, m => ["flight-details", { reg: m[1], date: m[2] }]],
     [/^\/api\/live\/([^/]+)$/, m => ["aircraft-live", { callsign: m[1] }]],
     [/^\/api\/identify\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)\/([^/]+)$/, m => ["aircraft-live", { airline: m[1], number: m[2], from: m[3], to: m[4], lat: m[5], lon: m[6] }]],
@@ -34,6 +36,7 @@ createServer(async (req, res) => {
   if (path === "/" || path.startsWith("/airport/")) path = "/index.html";
   if (path.startsWith("/aircraft/")) path = "/aircraft.html";
   if (path.startsWith("/board/")) path = "/board.html";
+  for (const p of ["route", "airline", "flight"]) if (path.startsWith(`/${p}/`)) path = `/${p}.html`;
   const file = normalize(join(ROOT, path));
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {

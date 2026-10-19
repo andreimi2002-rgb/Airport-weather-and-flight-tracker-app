@@ -3,6 +3,7 @@
 import { indexAirports, airportPath } from "./airports.js";
 import { fetchAircraft, fetchAircraftPhoto, fetchAircraftNow, fetchAircraftFlights, aircraftFields, liveFields, liveProgressPct, aircraftPath, hhmm, statusView, placeName, LIVE_FRESH_MS } from "./flights.js";
 import { haversineKm, relative } from "./insights.js";
+import { mountSearch } from "./search-ui.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -16,11 +17,8 @@ const fromUrl = (() => { try { return decodeURIComponent(location.pathname.split
 const reg = /^[A-Z0-9][A-Z0-9-]{1,9}$/.test(fromUrl) ? fromUrl : null;
 let index = null, details = null, now = null, photo = null;
 
-$("regForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const r = String($("regInput").value).trim().toUpperCase();
-  if (/^[A-Z0-9][A-Z0-9-]{1,9}$/.test(r)) location.href = aircraftPath(r);
-});
+// The same search window as on the other pages (airports, airlines, routes, flights, aircraft).
+mountSearch({ button: $("chooseBtn"), getIndex: () => index });
 
 function fail(title, text) {
   $("statusTitle").textContent = title;
@@ -31,7 +29,6 @@ function fail(title, text) {
 
 async function start() {
   if (!reg) return fail("Not an aircraft registration", "Use an address like /aircraft/YR-ASA, or type a registration above.");
-  $("regInput").value = reg;
   $("acReg").textContent = reg;
   document.title = `${reg} — Airport Live`;
   $("statusView").hidden = true;

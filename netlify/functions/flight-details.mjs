@@ -47,10 +47,14 @@ export default async (req, context) => {
       const code = String(p.code || "").toUpperCase();
       if (!isFlightNumber(number)) return bad("Use a flight number, e.g. RO391.");
       if (!isLocalDate(date)) return bad("Use a date like 2026-10-19.");
-      if (!isAirportCode(code)) return bad("Use a 3-letter airport code.");
-      const airport = findAirport(code);
-      if (!airport) return json({ error: `No airport with the code ${code}.` }, 404, 86400);
-      result = await getFlightStatus(number, date, airport, opts);
+      // Without an airport (the flight page): every leg of the flight.
+      if (!code) result = await getFlightStatus(number, date, null, opts);
+      else {
+        if (!isAirportCode(code)) return bad("Use a 3-letter airport code.");
+        const airport = findAirport(code);
+        if (!airport) return json({ error: `No airport with the code ${code}.` }, 404, 86400);
+        result = await getFlightStatus(number, date, airport, opts);
+      }
     }
   } catch (err) {
     console.error("Flight details failed", err);
@@ -60,7 +64,7 @@ export default async (req, context) => {
 };
 
 export const config = {
-  path: ["/api/aircraft/:reg", "/api/aircraft-flights/:reg/:date", "/api/flight-status/:number/:date/:code"],
+  path: ["/api/aircraft/:reg", "/api/aircraft-flights/:reg/:date", "/api/flight-status/:number/:date/:code", "/api/flight-status/:number/:date"],
   method: "GET",
   rateLimit: { windowLimit: 30, windowSize: 60, aggregateBy: ["ip", "domain"] },
 };

@@ -3,10 +3,11 @@
 //   GET /api/live/WZZ3185          -> the aircraft flying this callsign now (adsb.lol, stored 5 min)
 //   GET /api/aircraft-now/YR-ASA   -> where this aircraft is now and its route (adsb.lol + VRS, stored 2 min)
 //   GET /api/airport-live/OTP      -> aircraft flying to or from this airport now (adsb.lol + VRS, stored 4 min)
+//   GET /api/airline-routes/KLM    -> the airline's known callsign routes (VRS standing data, stored 1 day)
 import { getStore } from "@netlify/blobs";
 import { memoryStore } from "../lib/flights/budget.mjs";
 import { isRegistration } from "../lib/flights/details.mjs";
-import { getAircraftPhoto, getLiveAircraft, getAircraftNow, getAirportLive, identifyFlight, isCallsign, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
+import { getAircraftPhoto, getLiveAircraft, getAircraftNow, getAirportLive, identifyFlight, isCallsign, airlineRoutes, VRS, DEFAULT_ADSB_DAILY_CAP } from "../lib/flights/live.mjs";
 import { findAirport, isAirportCode, iataForIcao } from "../lib/airports.mjs";
 
 const env = name => (globalThis.Netlify?.env?.get(name) ?? process.env[name]) || null;
@@ -30,6 +31,16 @@ export default async (req, context) => {
   const p = context?.params || {};
   let result;
   try {
+    if (p.icao !== undefined) {
+      // An airline's known callsign routes (VRS standing data, CC0), airports as our IATA codes when known.
+      const icao = String(p.icao).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(icao)) return json({ error: "Use the airline's 3-letter ICAO code, e.g. /api/airline-routes/KLM." }, 400, 86400);
+      let routes;
+      try { routes = await airlineRoutes(icao, liveStore(), Date.now()); }
+      catch (err) { return json({ status: "error", notice: err.message, routes: [] }, 200, 60); }
+      const list = Object.entries(routes || {}).map(([cs, r]) => { const [a, b] = r.split("-"); return [cs, iataForIcao(a) || a, iataForIcao(b) || b]; });
+      return json({ status: "ok", icao, routes: list, source: VRS }, 200, 3600);
+    }
     if (p.code !== undefined) {
       const code = String(p.code).toUpperCase();
       const a = isAirportCode(code) ? findAirport(code) : null;
@@ -67,7 +78,7 @@ export default async (req, context) => {
 };
 
 export const config = {
-  path: ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/airport-live/:code", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
+  path: ["/api/aircraft-photo/:reg", "/api/aircraft-now/:reg", "/api/airport-live/:code", "/api/airline-routes/:icao", "/api/live/:callsign", "/api/identify/:airline/:number/:from/:to/:lat/:lon"],
   method: "GET",
   rateLimit: { windowLimit: 30, windowSize: 60, aggregateBy: ["ip", "domain"] },
 };
