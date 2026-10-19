@@ -1,6 +1,8 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields } from "./flights.js";
+import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
 import { fetchWeather, iconFor, ageMinutes, ageText, timeLabel, dayTimeUtc, stripType, localHour, forecastSlots, fmtTemp, tafGroups, STALE_METAR_MIN, REFRESH_MS } from "./weather.js";
@@ -539,7 +541,8 @@ function renderFlightDrawer() {
     const t = dep.revised || dep.scheduled, due = Date.parse(t?.utc) < now;
     trackNote = `<span>${due ? `Departure was due ${relative(t)} · not reported yet` : `Departs ${relative(t)}`}</span><span></span>`;
   }
-  else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? "Landed" : "Due"} ${relative(arr.runway || arr.revised || arr.scheduled)}</span><span></span>`;
+  // Only "Landed" when the provider reports it; otherwise the arrival was due, not confirmed.
+  else if (prog.state === "after") trackNote = `<span>${f.status === "arrived" ? `Landed ${relative(arr.runway || arr.revised || arr.scheduled)}` : `Arrival was due ${relative(arr.runway || arr.revised || arr.scheduled)} · landing not reported yet`}</span><span></span>`;
   const pct = prog.pct ?? 0;
   const track = prog.state
     ? `<div class="track" title="${prog.state === "air" ? "Estimated from the departure and arrival times, not a live position" : ""}"><div class="done" style="width:${pct}%"></div><div class="pt on" style="left:0"></div><div class="pt ${pct >= 100 ? "on" : ""}" style="left:100%"></div>${prog.state === "air" ? `<div class="plane" style="left:${pct}%">✈</div>` : ""}</div><div class="track-note">${trackNote}</div>`
@@ -550,7 +553,14 @@ function renderFlightDrawer() {
   // Photo
   let photoHtml, noteHtml = "";
   const p = fd.photo;
+  const reg = fd.reg || f.aircraft.registration || "";
   if (fd.photoKind === "demo") { photoHtml = `<img src="${esc(demoAircraftPhoto)}" alt="Illustrative aircraft photo">`; noteHtml = "Illustrative photo · not this aircraft"; }
+  else if (fd.photoKind === "planespotters" && p?.url) {
+    // Planespotters.net terms: photographer credit next to the photo, linked to the photo page.
+    const credit = `${esc(p.author || "Photographer unknown")} · Planespotters.net`;
+    photoHtml = `<img src="${esc(p.url)}" alt="Photo of aircraft ${esc(reg)}" onerror="this.parentElement.classList.add('no-photo')">`;
+    noteHtml = `Photo of this aircraft (${esc(reg)}) · ${p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${credit}</a>` : credit}`;
+  }
   else if (p?.url) {
     const by = [p.author, p.licence].filter(Boolean).map(esc).join(" · ");
     const credit = by ? " · " + (p.pageUrl ? `<a href="${esc(p.pageUrl)}" target="_blank" rel="noopener">${by}</a>` : by) : "";
@@ -587,7 +597,8 @@ function renderFlightDrawer() {
 
     <div class="fd-sec"><h3>Aircraft <small>${esc(fd.aircraftNote)}</small></h3>
       <div class="ac"><div class="plane-photo${photoHtml ? "" : " no-photo"}">${photoHtml}<span class="photo-note">${noteHtml}</span></div>
-      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
+      <div class="grid2">${fieldHtml("TYPE", model)}${fieldHtml("MANUFACTURER", maker)}${fieldHtml("REGISTRATION", fd.reg || f.aircraft.registration || af.acReg, true)}${fieldHtml("MODE-S HEX", f.aircraft.modeS || a?.modeS || NA, true)}${fieldHtml("AGE", af.acAge)}${fieldHtml("SEATS", af.acSeats)}${fieldHtml("ENGINES", af.acEngines)}${fieldHtml("DELIVERED", af.acDelivered)}${fieldHtml("OPERATOR", af.acOperator)}${fieldHtml("SERIAL (MSN)", a?.serial || NA, true)}</div></div>
+      ${fd.live ? `<div class="fd-sub"><h4>Live now <small>${esc(fd.live.callsign || "")} · seen ${esc(relative(fd.live.seenAt))}</small></h4><div class="grid3">${liveFields(fd.live).map(([k, v]) => fieldHtml(k, v)).join("")}</div><div class="note">Live ADS-B data: <a href="https://adsb.lol/" target="_blank" rel="noopener">adsb.lol</a> (ODbL).</div></div>` : ""}
     </div>
 
     <div class="fd-sec"><h3>Timeline</h3><ol class="timeline">${ms.map(x => `<li class="${x.key === "x" ? "bad" : x.done ? "done" : ""}">${esc(x.label)}${x.time ? ` · <span class="tl-t">${esc(hhmm(x.time))}</span><span class="tl-k">${x.kind}</span>` : ""}</li>`).join("")}</ol></div>
@@ -602,21 +613,82 @@ function renderFlightDrawer() {
 }
 
 const onlyReg = reg => ({ registration: reg, ageYears: null, seats: null, engines: null, engineType: null, deliveryDate: null, airline: null });
+const AIRBORNE = ["departed", "en-route", "approaching"];
+
+// Which aircraft is it? The board's registration, else the aircraft that live
+// ADS-B data (adsb.lol) shows flying this flight's callsign. Then a real photo
+// (Planespotters.net) and the details (AeroDataBox, 1 unit).
 async function lookupAircraft(f) {
-  const reg = f.aircraft.registration;
   if (f.demo) { fd.aircraftNote = "Demo flight: no aircraft lookup."; renderFlightDrawer(); return; }
-  if (!reg) { fd.aircraftNote = "No registration from the provider (yet)"; renderFlightDrawer(); return; }
+  let reg = f.aircraft.registration, regFrom = reg ? "board" : null, why = "";
+  const cand = callsignFor(f);
+  if (!reg) {
+    fd.aircraftNote = "Looking for this flight in live ADS-B data…";
+    renderFlightDrawer();
+    // 1. The provider's own callsign: the aircraft flying it now.
+    if (cand?.fromProvider) {
+      try {
+        const body = await fetchLive(cand.callsign);
+        if (fd?.flight !== f) return;
+        if (body.aircraft?.registration && !typeConflicts(body.aircraft.typeCode, f.aircraft.model)) { reg = body.aircraft.registration; regFrom = "adsb"; fd.live = body.aircraft; }
+      } catch { /* try the route match */ }
+    }
+    // 2. Airlines mostly fly under callsigns like "WMT1LH", not the flight number:
+    //    find the one aircraft of this airline flying exactly this route near where the flight should be.
+    // The airline's ICAO code, or its IATA code (the server then tries every airline using it).
+    const from = lookup(f.departure.airport.iata), to = lookup(f.arrival.airport.iata), icao = f.airline?.icao || f.airline?.iata;
+    if (!reg && !icao) why = "the provider gave no airline code, so live data can't be matched";
+    else if (!reg && (!from || !to)) why = "one of the airports is not in our airport list";
+    if (!reg && icao && from && to) {
+      try {
+        const body = await fetchIdentify(icao, flightDigits(f), from.iata, to.iata, estimatedPosition(f, from, to));
+        if (fd?.flight !== f) return;
+        const ac = body.aircraft;
+        // Says exactly which step found nothing, so a screenshot shows the cause.
+        if (ac?.registration && !typeConflicts(ac.typeCode, f.aircraft.model)) { reg = ac.registration; regFrom = "adsb"; fd.live = ac; }
+        else if (ac?.registration) why = `${ac.callsign} flies ${from.iata}–${to.iata} but is a ${ac.typeCode}, a different family from the scheduled ${f.aircraft.model}`;
+        else if (body.status !== "ok") why = body.notice || "live data unavailable";
+        else if (body.matches > 1) why = "more than one aircraft matched, so none is shown";
+        else if (body.airlineUnknown) why = `the airline code ${icao} is not in the open airline list`;
+        else if (!body.airlineNearby) why = `no ${(body.airlines || [icao]).join("/")} aircraft within 250 nm (${body.nearby ?? 0} aircraft seen)`;
+        else if (!body.candidates) why = `${body.airlineNearby} ${icao} aircraft nearby, none on the ${from.iata}–${to.iata} line or at either airport`;
+        else why = `checked ${(body.checked || []).map(c => `${c.callsign} ${c.route || "route unknown"}`).join(", ")}; none on ${from.iata}–${to.iata}`;
+      } catch (err) { why = "live lookup failed (" + err.message + ")"; }
+    }
+    if (fd?.flight !== f) return;
+  } else if (cand?.fromProvider && AIRBORNE.includes(f.status)) {
+    // Known aircraft in the air: show its live altitude and speed.
+    fetchLive(cand.callsign).then(body => { if (fd?.flight === f && body.aircraft?.registration === reg) { fd.live = body.aircraft; renderFlightDrawer(); } }).catch(() => {});
+  }
+  if (!reg) {
+    const dep = Date.parse((f.departure.revised || f.departure.scheduled)?.utc);
+    const early = !AIRBORNE.includes(f.status) && f.status !== "arrived" && Number.isFinite(dep) && dep - Date.now() > 30 * 60000;
+    fd.aircraftNote = early ? "Aircraft not known yet: it usually shows up in live data shortly before departure"
+      : "Aircraft not found in live ADS-B data" + (why ? ": " + why : "");
+    renderFlightDrawer();
+    return;
+  }
+
+  fd.reg = reg;
   fd.aircraftNote = "Looking up " + reg + "…";
   renderFlightDrawer();
-  let body;
-  try { body = await fetchAircraft(reg); }
-  catch (err) { if (fd?.flight === f) { fd.aircraft = onlyReg(reg); fd.aircraftNote = "Couldn't look up the aircraft (" + err.message + ")"; renderFlightDrawer(); } return; }
+  const [photoRes, detRes] = await Promise.allSettled([fetchAircraftPhoto(reg), fetchAircraft(reg)]);
   if (fd?.flight !== f) return;
-  const a = body.aircraft;
-  if (!a) { fd.aircraft = onlyReg(reg); fd.aircraftNote = body.status === "ok" ? `AeroDataBox has no record of ${reg}` : body.notice || "Aircraft details unavailable"; renderFlightDrawer(); return; }
-  fd.aircraft = a;
-  fd.aircraftNote = "AeroDataBox" + (body.fetchedAt ? " · looked up " + body.fetchedAt.slice(0, 10) : "") + (body.stale ? " · older lookup" : "");
-  if (a.photo) { fd.photo = a.photo; fd.photoKind = "this-aircraft"; }
+  const real = photoRes.status === "fulfilled" ? photoRes.value.photo : null;
+  let a = null, detNote;
+  if (detRes.status === "fulfilled") {
+    const body = detRes.value;
+    a = body.aircraft;
+    // Never mix two aircraft: details must be for the registration we identified.
+    if (a?.registration && a.registration.toUpperCase() !== reg.toUpperCase()) a = null;
+    detNote = a ? "AeroDataBox" + (body.fetchedAt ? " · looked up " + body.fetchedAt.slice(0, 10) : "") + (body.stale ? " · older lookup" : "")
+      : body.status === "ok" ? `AeroDataBox has no record of ${reg}` : body.notice || "Aircraft details unavailable";
+  } else detNote = "Couldn't look up the aircraft details";
+  fd.aircraft = a || onlyReg(reg);
+  if (real) { fd.photo = real; fd.photoKind = "planespotters"; }
+  else if (a?.photo) { fd.photo = a.photo; fd.photoKind = "this-aircraft"; }
+  const swapped = regFrom === "adsb" && fd.live && typeDiffers(fd.live.typeCode, f.aircraft.model) ? `operated by a ${fd.live.typeCode} (the schedule lists ${f.aircraft.model})` : null;
+  fd.aircraftNote = [regFrom === "adsb" ? "Registration from live ADS-B (adsb.lol)" : null, swapped, detNote].filter(Boolean).join(" · ");
   renderFlightDrawer();
 }
 

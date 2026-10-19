@@ -108,3 +108,81 @@ export function aircraftFields(a) {
     acOperator: a.airline || NA,
   };
 }
+
+// ---------- the actual aircraft from free sources ----------
+export const fetchAircraftPhoto = reg => getJSON("/api/aircraft-photo/" + encodeURIComponent(reg));
+export const fetchLive = callsign => getJSON("/api/live/" + encodeURIComponent(callsign));
+
+// ICAO callsign to look for in live ADS-B data. The provider's own callsign is
+// trusted; otherwise "<airline ICAO><flight number>" is only a guess, so the
+// caller must check the aircraft type before using what it finds.
+export function callsignFor(f) {
+  const own = String(f.callSign || "").toUpperCase().replace(/\s+/g, "");
+  if (/^[A-Z0-9]{3,8}$/.test(own)) return { callsign: own, fromProvider: true };
+  const icao = String(f.airline?.icao || "").toUpperCase();
+  const m = /^\S+\s+0*(\d{1,4}[A-Z]?)$/.exec(String(f.number || "").trim().toUpperCase());
+  if (/^[A-Z]{3}$/.test(icao) && m) return { callsign: icao + m[1], fromProvider: false };
+  return null;
+}
+
+// ICAO type designator -> the number people use for the type (A21N -> 321, B38M -> 737).
+const TYPE_FAMILY = {
+  A318: 318, A319: 319, A320: 320, A321: 321, A19N: 319, A20N: 320, A21N: 321,
+  A332: 330, A333: 330, A338: 330, A339: 330, A342: 340, A343: 340, A345: 340, A346: 340, A359: 350, A35K: 350, A388: 380,
+  BCS1: 220, BCS3: 220,
+  B733: 737, B734: 737, B735: 737, B736: 737, B737: 737, B738: 737, B739: 737, B37M: 737, B38M: 737, B39M: 737, B3XM: 737,
+  B744: 747, B748: 747, B752: 757, B753: 757, B762: 767, B763: 767, B764: 767,
+  B772: 777, B773: 777, B77L: 777, B77W: 777, B778: 777, B779: 777, B788: 787, B789: 787, B78X: 787,
+  E170: 170, E75L: 175, E75S: 175, E190: 190, E195: 195, E290: 190, E295: 195,
+  AT43: 42, AT45: 42, AT46: 42, AT72: 72, AT75: 72, AT76: 72, DH8D: 8, CRJ2: 200, CRJ7: 700, CRJ9: 900, CRJX: 1000, SU95: 100,
+};
+// True only when both sides name the same type family (e.g. "A21N" and "Airbus A321 NEO").
+export function typeMatches(typeCode, boardModel) {
+  const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
+  const n = /(\d+)/.exec(String(boardModel || ""));
+  return !!fam && !!n && Number(n[1]) === fam;
+}
+
+// "FL400 · 467 kt" or "On the ground"
+export function liveLine(ac) {
+  if (!ac) return "";
+  if (ac.onGround) return "On the ground";
+  const alt = ac.altitudeFt === null ? null : ac.altitudeFt >= 18000 ? "FL" + String(Math.round(ac.altitudeFt / 100)).padStart(3, "0") : ac.altitudeFt.toLocaleString("en-US") + " ft";
+  return [alt, ac.groundSpeedKt !== null ? ac.groundSpeedKt + " kt" : null].filter(Boolean).join(" · ") || "Airborne";
+}
+
+// The aircraft of this airline flying exactly this route near pos (adsb.lol).
+// number: the digits of the flight number ("W4 0346" -> "346"), or "-" when unknown.
+export const flightDigits = f => /^\S+\s+0*(\d{1,4}[A-Z]?)$/.exec(String(f.number || "").trim().toUpperCase())?.[1] || "-";
+export const fetchIdentify = (airlineIcao, number, from, to, pos) =>
+  getJSON(`/api/identify/${encodeURIComponent(airlineIcao)}/${encodeURIComponent(number)}/${from}/${to}/${pos.lat.toFixed(2)}/${pos.lon.toFixed(2)}`);
+
+// True when both sides name a type family and they differ (e.g. "A320" vs "Boeing 737-800").
+// The board often lists the planned type; airlines swap within a family
+// (an A321 instead of an A320), so only a different family is a conflict.
+const FAMILY_GROUP = { 318: "A320", 319: "A320", 320: "A320", 321: "A320", 170: "EJET", 175: "EJET", 190: "EJET", 195: "EJET", 42: "ATR", 72: "ATR", 200: "CRJ", 700: "CRJ", 900: "CRJ", 1000: "CRJ" };
+const group = n => FAMILY_GROUP[n] || String(n);
+export function typeConflicts(typeCode, boardModel) {
+  const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
+  const n = /(\d+)/.exec(String(boardModel || ""));
+  return !!fam && !!n && group(fam) !== group(Number(n[1]));
+}
+// True when the live aircraft is another type of the same family (e.g. A321 for a planned A320).
+export function typeDiffers(typeCode, boardModel) {
+  const fam = TYPE_FAMILY[String(typeCode || "").toUpperCase()];
+  const n = /(\d+)/.exec(String(boardModel || ""));
+  return !!fam && !!n && fam !== Number(n[1]) && !typeConflicts(typeCode, boardModel);
+}
+
+// Labelled live values for the drawer: altitude, ground speed, vertical, as people read them.
+export function liveFields(ac) {
+  if (!ac) return [];
+  const NA = "Not available";
+  const alt = ac.onGround ? "On the ground"
+    : ac.altitudeFt === null || ac.altitudeFt === undefined ? NA
+    : `${ac.altitudeFt.toLocaleString("en-US")} ft · ${Math.round(ac.altitudeFt * 0.3048).toLocaleString("en-US")} m` + (ac.altitudeFt >= 18000 ? ` (FL${String(Math.round(ac.altitudeFt / 100)).padStart(3, "0")})` : "");
+  const spd = ac.groundSpeedKt === null || ac.groundSpeedKt === undefined ? NA : `${ac.groundSpeedKt} kt · ${Math.round(ac.groundSpeedKt * 1.852)} km/h`;
+  const vr = ac.verticalRateFpm;
+  const vert = ac.onGround ? "—" : vr === null || vr === undefined ? NA : Math.abs(vr) < 300 ? "Level" : `${vr > 0 ? "Climbing" : "Descending"} ${Math.abs(Math.round(vr / 50) * 50).toLocaleString("en-US")} ft/min`;
+  return [["ALTITUDE", alt], ["GROUND SPEED", spd], ["VERTICAL", vert]];
+}

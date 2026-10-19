@@ -46,7 +46,7 @@ test("normalizes AeroDataBox flights without inventing fields", () => {
   assert.equal(unknown.delayMinutes, null);
   assert.equal(unknown.distanceKm, null);
   assert.equal(unknown.scheduledDurationMinutes, null);
-  assert.deepEqual(unknown.aircraft, { registration: null, model: null, modeS: null, photo: null });
+  assert.deepEqual(unknown.aircraft, { registration: null, model: null, manufacturer: null, modeS: null, photo: null });
   assert.equal(unknown.airline.iata, null);
 
   const arr = b.arrivals[0];
