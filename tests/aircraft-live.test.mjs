@@ -260,3 +260,15 @@ test("live fields say altitude, speed and climb in plain words", async () => {
   const { normalizeAdsb } = await import("../netlify/lib/flights/live.mjs");
   assert.equal(normalizeAdsb({ flight: "X", r: "Y", alt_baro: 23750, gs: 420.6, baro_rate: 1216 }, NOW).verticalRateFpm, 1216);
 });
+
+test("not-found message: turboprops get the plain explanation, service problems keep their wording", async () => {
+  const { notFoundMessage } = await import("../public/js/flights.js");
+  const ATR = "Aircraft not visible in live ADS-B data (some aircraft, e.g. older ATR 72s, don't broadcast their position)";
+  assert.equal(notFoundMessage("ATR 72", "checked ROT648P CLJ-OTP; none on OTP–SCV"), ATR);
+  assert.equal(notFoundMessage("ATR 72-500", "no ROT aircraft within 250 nm (80 aircraft seen)"), ATR);
+  assert.equal(notFoundMessage("De Havilland Canada Dash 8-400", ""), ATR);
+  assert.equal(notFoundMessage("Airbus A320", "checked WMT3FJ BLQ-RMO; none on OTP–VLC"), "Aircraft not found in live ADS-B data: checked WMT3FJ BLQ-RMO; none on OTP–VLC");
+  assert.equal(notFoundMessage("ATR 72", "Live aircraft lookups are used up for today."), "Aircraft not found in live ADS-B data: Live aircraft lookups are used up for today.");
+  assert.equal(notFoundMessage("ATR 72", "adsb.lol is busy (too many requests)"), "Aircraft not found in live ADS-B data: adsb.lol is busy (too many requests)");
+  assert.equal(notFoundMessage(null, ""), "Aircraft not found in live ADS-B data");
+});
