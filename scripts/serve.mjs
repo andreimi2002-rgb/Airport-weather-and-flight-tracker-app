@@ -32,6 +32,7 @@ createServer(async (req, res) => {
   }
   if (path === "/" || path.startsWith("/airport/")) path = "/index.html";
   if (path.startsWith("/aircraft/")) path = "/aircraft.html";
+  if (path.startsWith("/board/")) path = "/board.html";
   const file = normalize(join(ROOT, path));
   if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
   try {

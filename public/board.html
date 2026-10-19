@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1017">
+<title>Board — Airport Live</title>
+<link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+<link rel="preload" href="/data/airports.json" as="fetch" crossorigin>
+<script type="module" src="/js/wall.js"></script>
+</head>
+<body class="wall">
+<header class="wall-top">
+  <div class="wall-id">
+    <h1 class="wall-code" id="wCode">—</h1>
+    <div><div class="wall-name" id="wName">Loading…</div><div class="wall-sub" id="wSub"></div></div>
+  </div>
+  <div class="wall-wx" id="wWx" aria-live="off"></div>
+  <div class="wall-clock" aria-live="off"><div class="wall-time"><span id="wTime">—</span><span class="wall-sec" id="wSec"></span></div><div class="wall-date" id="wDate"></div></div>
+</header>
+<div class="wall-bar">
+  <span class="wall-updated" id="wUpdated"></span>
+  <div class="wall-actions">
+    <button class="ghost" id="wFull" type="button">⤢ Full screen</button>
+    <button class="ghost" id="wWake" type="button" aria-pressed="false" hidden>☀ Keep screen on</button>
+    <a class="ghost" id="wExit" href="/">✕ Exit board</a>
+  </div>
+</div>
+<div class="wall-notice" id="wNotice" hidden></div>
+<main class="wall-cols">
+  <section class="wall-col" aria-labelledby="wDepTitle"><div class="wall-col-head"><h2 id="wDepTitle">↗ Departures</h2><span class="wall-page" id="wDepPage"></span></div><div class="wall-thead" aria-hidden="true"><span>Time</span><span>Flight</span><span>To</span><span>Gate</span><span>Status</span></div><div class="wall-rows" id="wDep" role="list"></div></section>
+  <section class="wall-col" aria-labelledby="wArrTitle"><div class="wall-col-head"><h2 id="wArrTitle">↙ Arrivals</h2><span class="wall-page" id="wArrPage"></span></div><div class="wall-thead" aria-hidden="true"><span>Time</span><span>Flight</span><span>From</span><span>Belt</span><span>Status</span></div><div class="wall-rows" id="wArr" role="list"></div></section>
+</main>
+<footer class="wall-foot" id="wFoot"></footer>
+</body></html>
