@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { matchBoardLive } from "../public/js/flights.js";
-import { getAirportLive } from "../netlify/lib/flights/live.mjs";
+import { getAirportLive, airlineRoutes } from "../netlify/lib/flights/live.mjs";
 import { memoryStore } from "../netlify/lib/flights/budget.mjs";
 
 const now = Date.parse("2026-10-20T12:00:00Z");
@@ -73,4 +73,16 @@ test("airport live: one area call, keeps aircraft on routes to or from the airpo
   assert.deepEqual(body.aircraft.map(a => a.callsign), ["WZZ1AB"]);
   assert.deepEqual(body.aircraft[0].airlineIata, ["W6"]);
   assert.equal(calls.filter(u => u.includes("adsb.lol")).length, 1);
+});
+
+test("route files: large airlines split into -0 … -9 are read and merged", async () => {
+  const fetchImpl = async url => {
+    const u = String(url);
+    if (u.endsWith("/W/WZZ-all.csv")) return new Response("", { status: 404 });
+    if (u.endsWith("/W/WZZ-1.csv")) return new Response("Callsign,Code,Number,AirlineCode,AirportCodes\nWZZ1AB,WZZ,1AB,WZZ,LROP-EGGW\n");
+    if (u.endsWith("/W/WZZ-4.csv")) return new Response("Callsign,Code,Number,AirlineCode,AirportCodes\nWZZ4CD,WZZ,4CD,WZZ,LHBP-LIRF\n");
+    return new Response("", { status: 404 });
+  };
+  const routes = await airlineRoutes("WZZ", memoryStore(), now, fetchImpl);
+  assert.deepEqual(routes, { WZZ1AB: "LROP-EGGW", WZZ4CD: "LHBP-LIRF" });
 });

@@ -203,8 +203,16 @@ export function parseAirlinesCsv(text) {
   return out;
 }
 
+// Large airlines (AFR, EZY, EJU, RYR, THY, VLG, WZZ) have no "-all" file:
+// their routes are split into "-0.csv" … "-9.csv", read and merged here.
 export const airlineRoutes = (icao, store, now, fetchImpl) =>
-  cachedFile(store, "routes/" + icao, ROUTES_FRESH_MS, now, async () => parseRoutesCsv(await getText(`${STANDING_DATA}/routes/schema-01/${icao[0]}/${icao}-all.csv`, fetchImpl)));
+  cachedFile(store, "routes/" + icao, ROUTES_FRESH_MS, now, async () => {
+    const dir = `${STANDING_DATA}/routes/schema-01/${icao[0]}/${icao}`;
+    const all = await getText(`${dir}-all.csv`, fetchImpl);
+    if (all !== null) return parseRoutesCsv(all);
+    const parts = await Promise.all("0123456789".split("").map(d => getText(`${dir}-${d}.csv`, fetchImpl)));
+    return Object.assign({}, ...parts.filter(t => t !== null).map(parseRoutesCsv));
+  });
 
 // The airline's ICAO codes: given (3 letters), or all ICAO codes that use this IATA code.
 export async function airlineIcaos(code, store, now, fetchImpl) {
