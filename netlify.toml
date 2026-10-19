@@ -1,0 +1,12 @@
+# Netlify reads this file from the repository root. It overrides the
+# publish directory set in the Netlify UI. There is no build step.
+[build]
+  publish = "public"
+  command = ""
+
+# Every airport has its own address, e.g. /airport/OTP.
+# The single page app reads the code from the URL.
+[[redirects]]
+  from = "/airport/*"
+  to = "/index.html"
+  status = 200
