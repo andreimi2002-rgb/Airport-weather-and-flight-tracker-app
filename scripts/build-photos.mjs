@@ -129,9 +129,11 @@ const f = Object.fromEntries(data.fields.map((k, i) => [k, i]));
 const airports = data.airports.map(r => ({ iata: r[f.iata], icao: r[f.icao], city: r[f.city] }));
 
 console.log("Querying Wikidata…");
-const itemRows = await sparql("SELECT ?a ?iata ?icao ?img WHERE { ?a wdt:P238 ?iata . OPTIONAL { ?a wdt:P239 ?icao } OPTIONAL { ?a wdt:P18 ?img } }");
+// Every photo statement (not only the "best" one wdt:P18 returns), with its
+// rank so preferred photos are tried first; deprecated ones are skipped.
+const itemRows = await sparql("SELECT ?a ?iata ?icao ?img ?rank WHERE { ?a wdt:P238 ?iata . OPTIONAL { ?a wdt:P239 ?icao } OPTIONAL { ?a p:P18 ?st . ?st ps:P18 ?img ; wikibase:rank ?rank . FILTER(?rank != wikibase:DeprecatedRank) } }");
 // "Place served" that has a population: a city/town, not a railway station.
-const cityRows = await sparql('SELECT ?a ?city ?cityLabel ?cimg WHERE { ?a wdt:P238 [] ; wdt:P931 ?city . FILTER EXISTS { ?city wdt:P1082 [] } OPTIONAL { ?city wdt:P18 ?cimg } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }');
+const cityRows = await sparql('SELECT ?a ?city ?cityLabel ?cimg ?crank WHERE { ?a wdt:P238 [] ; wdt:P931 ?city . FILTER EXISTS { ?city wdt:P1082 [] } OPTIONAL { ?city p:P18 ?cst . ?cst ps:P18 ?cimg ; wikibase:rank ?crank . FILTER(?crank != wikibase:DeprecatedRank) } SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }');
 const byIata = groupAirportItems(itemRows);
 const citiesByAirport = groupCities(cityRows);
 

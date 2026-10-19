@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fileNameFromFilePath, groupAirportItems, matchAirport, groupCities, matchCity, acceptLicence, cleanAuthor, toPhoto, shardKey } from "../scripts/lib/photo-data.mjs";
+import { fileNameFromFilePath, groupAirportItems, matchAirport, groupCities, matchCity, acceptLicence, cleanAuthor, toPhoto, shardKey, rankOrder } from "../scripts/lib/photo-data.mjs";
 
 const W = "http://www.wikidata.org/entity/";
 const FP = "http://commons.wikimedia.org/wiki/Special:FilePath/";
@@ -42,8 +42,8 @@ test("matchCity: single city, municipality tie-break, ambiguous, no label", () =
 });
 
 test("acceptLicence allows only free licences", () => {
-  for (const ok of ["Public domain", "CC0", "CC BY 2.0", "CC BY-SA 4.0", "CC BY-SA 3.0 de", "PD-USGov"]) assert.ok(acceptLicence(ok), ok);
-  for (const bad of ["", "CC BY-NC 2.0", "CC BY-ND 4.0", "GFDL", "All rights reserved", "Fair use"]) assert.ok(!acceptLicence(bad), bad);
+  for (const ok of ["Public domain", "CC0", "CC BY 2.0", "CC BY-SA 4.0", "CC BY-SA 3.0 de", "PD-USGov", "Attribution"]) assert.ok(acceptLicence(ok), ok);
+  for (const bad of ["", "CC BY-NC 2.0", "CC BY-ND 4.0", "GFDL", "All rights reserved", "Fair use", "Attribution-NonCommercial", "Attribution NoDerivs"]) assert.ok(!acceptLicence(bad), bad);
 });
 
 test("cleanAuthor turns Commons HTML into short text", () => {
@@ -73,4 +73,23 @@ test("toPhoto builds a credited record and rejects unusable files", () => {
 test("shardKey", () => {
   assert.equal(shardKey("OTP"), "O");
   assert.equal(shardKey("1AB"), "1");
+});
+
+test("all photos are kept, preferred rank first (Schiphol/Amsterdam case)", () => {
+  const W = "http://www.wikidata.org/entity/", F = "http://commons.wikimedia.org/wiki/Special:FilePath/";
+  const R = "http://wikiba.se/ontology#";
+  const byIata = groupAirportItems([
+    { a: W + "Q9694", iata: "AMS", icao: "EHAM", img: F + "Schiphol%20Tower.jpg", rank: R + "NormalRank" },
+    { a: W + "Q9694", iata: "AMS", icao: "EHAM", img: F + "Ams-above-2007.jpg", rank: R + "PreferredRank" },
+    { a: W + "Q9694", iata: "AMS", icao: "EHAM", img: F + "Schiphol%202016%20PH-PBA%20(29097500693).jpg", rank: R + "NormalRank" },
+  ]);
+  assert.deepEqual(matchAirport({ iata: "AMS", icao: "EHAM" }, byIata).images,
+    ["Ams-above-2007.jpg", "Schiphol 2016 PH-PBA (29097500693).jpg", "Schiphol Tower.jpg"]);
+  const cities = groupCities([
+    { a: W + "Q9694", city: W + "Q727", cityLabel: "Amsterdam", cimg: F + "Imagen.png", crank: R + "NormalRank" },
+    { a: W + "Q9694", city: W + "Q727", cityLabel: "Amsterdam", cimg: F + "Amsterdam%20airphoto.jpg", crank: R + "PreferredRank" },
+  ]);
+  assert.deepEqual(matchCity({ city: "Amsterdam" }, "Q9694", cities).images, ["Amsterdam airphoto.jpg", "Imagen.png"]);
+  assert.equal(rankOrder(R + "PreferredRank"), 0);
+  assert.equal(rankOrder(undefined), 1, "rows without rank (old format) count as normal");
 });
