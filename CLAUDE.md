@@ -52,3 +52,23 @@ Implement items 1–3 with the design preserved, run checks, test airport switch
 6. Saved airports and shortcuts: pin multiple airports (stored locally for now), a bookmarkable URL for each airport (e.g. /airport/OTP), a "home airport" that opens by default, and a clean one-screen board view suitable for leaving open on a desktop monitor, tablet or phone.
 
 Later (not now): installable PWA polish, alerts, Explorer layer, native widget, public launch licensing review.
+
+## Progress and decisions (keep this updated after each item)
+Local copy of the repo: `C:\Users\stroe\Downloads\airport-live-repo` (open this folder in VS Code). Netlify site: `live-airport` (Deploy Previews come from pull requests; previews need Netlify team login). The `gh` CLI is not installed: push the branch and give the owner the `pull/new/<branch>` link.
+
+Done and merged:
+- Item 1 (PR #1): ~9,000 airports from OurAirports (public domain) in `public/data/airports.json`, built by `npm run build:airports`. Time zones from mwgg/Airports (MIT); unknown/conflicting time zones stay empty. Search on the device, `/airport/OTP` addresses (netlify.toml rewrite), saved airports in localStorage, demo weather only for SEA/LHR/OTP/JFK, demo flights only for SEA.
+- Item 2 (PR #2): photos from Wikidata + Wikimedia Commons, prepared by `npm run build:photos` into `public/data/photos/<letter>.json`, credited on each photo. Only public domain / CC0 / CC BY / CC BY-SA, >= 640 px, links checked. Ambiguous matches skipped, never guessed.
+
+Owner's choices so far: OurAirports for airports; mwgg for time zones; airport search on the device (no function); no build step for now (move to React/Vite only when needed); Wikimedia photos prepared ahead, not looked up live.
+
+Known gaps to revisit later (owner asked, not now): some airports have no airport or city photo (e.g. Timișoara TSR); some chosen photos look odd (satellite views, collages); Heathrow's only photo is GFDL (excluded); Dallas/Fort Worth has two cities so none is shown; on phones the flight table still scrolls sideways (planned for item 6).
+
+Later, after the other scope items (owner, 2026-10-19): improve the weather panel and make weather clickable to open a detailed view (e.g. decoded TAF, more forecast hours, more fields). Owner was happy with the item 3 version for now.
+
+In review (not merged yet):
+- Item 3 (branch `feature/weather`): `/api/weather/<IATA>` Netlify Function (`netlify/functions/weather.mjs`, logic in `netlify/lib/weather.mjs`). METAR/TAF from aviationweather.gov (no key; HTTP 204 = no report), forecast from MET Norway (owner's choice over Open-Meteo: commercial use allowed, CC BY 4.0, needs identifying User-Agent). No METAR station -> say so and show forecast labelled as forecast, never borrow another station. CDN cache 5 min (1 min if a part failed), rate limit 60/min/IP. Demo weather removed.
+
+Next after item 3 is merged: item 4, flight provider comparison (branch `feature/flights`).
+
+Tools available for testing: Node 24, Chrome (headless) and netlify-cli 27 (installed globally, not a project dependency, to keep Netlify builds fast) on this machine. No Python (not needed). `npm run serve` also serves `/api/weather`. Headless Chrome `--window-size` cannot go below ~500 px wide: for phone screenshots use DevTools device emulation (Emulation.setDeviceMetricsOverride). Quirk: under `netlify dev`, a function 404 is retried as `<path>.html`, so unknown codes show 400 locally; production and `npm run serve` return 404. The Bash tool cannot read some repo files (permission denied); use the Read tool for those.
