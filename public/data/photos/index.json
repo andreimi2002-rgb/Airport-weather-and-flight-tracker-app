@@ -2,20 +2,18 @@
  "version": 1,
  "generated": "2026-10-19",
  "counts": {
-  "airports": 6079,
-  "airportPhotos": 3901,
-  "cityPhotos": 4746,
+  "airports": 6081,
+  "airportPhotos": 3910,
+  "cityPhotos": 4749,
   "cityNames": 5178
  },
  "rejected": {
   "too": 833,
   "no": 104,
-  "licence": 229,
+  "licence": 191,
   "type": 34
  },
- "linkProblems": {
-  "rate-limited": 1
- },
+ "linkProblems": {},
  "sources": [
   {
    "name": "Wikidata",

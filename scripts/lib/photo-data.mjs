@@ -117,7 +117,8 @@ export function matchCity(airport, airportQid, citiesByAirport) {
 
 // Only free licences that allow showing the photo with credit.
 // "Attribution" is the Commons {{Attribution}} licence: free use, credit required.
-const LICENCE_OK = /^(public domain|pd(-[\w.-]+)?|cc0( 1\.0)?|cc[ -]by(-sa)?( \d\.\d)?( [a-z]{2,3})?|attribution)$/i;
+// FAL / Free Art License / LAL (Licence Art Libre): free with credit, like CC BY-SA (owner's choice, 2026-10-19).
+const LICENCE_OK = /^(public domain|pd(-[\w.-]+)?|cc0( 1\.0)?|cc[ -]by(-sa)?( \d\.\d)?( [a-z]{2,3})?|attribution|fal( \d\.\d)?|free art licen[cs]e( \d\.\d)?|lal( \d\.\d)?)$/i;
 export function acceptLicence(name) {
   const n = String(name || "").trim();
   if (!n || /\b(nc|nd)\b/i.test(n)) return false;

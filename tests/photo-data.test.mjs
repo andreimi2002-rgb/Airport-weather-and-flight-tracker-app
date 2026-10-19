@@ -42,7 +42,7 @@ test("matchCity: single city, municipality tie-break, ambiguous, no label", () =
 });
 
 test("acceptLicence allows only free licences", () => {
-  for (const ok of ["Public domain", "CC0", "CC BY 2.0", "CC BY-SA 4.0", "CC BY-SA 3.0 de", "PD-USGov", "Attribution"]) assert.ok(acceptLicence(ok), ok);
+  for (const ok of ["Public domain", "CC0", "CC BY 2.0", "CC BY-SA 4.0", "CC BY-SA 3.0 de", "PD-USGov", "Attribution", "FAL", "FAL 1.3", "Free Art License", "LAL 1.3"]) assert.ok(acceptLicence(ok), ok);
   for (const bad of ["", "CC BY-NC 2.0", "CC BY-ND 4.0", "GFDL", "All rights reserved", "Fair use", "Attribution-NonCommercial", "Attribution NoDerivs"]) assert.ok(!acceptLicence(bad), bad);
 });
 
