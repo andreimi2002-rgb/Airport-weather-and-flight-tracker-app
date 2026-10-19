@@ -25,7 +25,7 @@ Live updates (estimated/actual times, status, gates) exist only where AeroDataBo
 - Weak: Poland 39%, Brazil 35%, China 35%, Mexico 20%, much of Africa and the Caribbean 0% (schedules only).
 - A free endpoint reports each airport's coverage, so the app can show "live" or "schedule only" per airport.
 
-## Recommendation: AeroDataBox, free Basic plan on RapidAPI
+## Recommendation: AeroDataBox, free Basic plan on RapidAPI (chosen by the owner on 2026-10-19)
 
 **Why:**
 1. It is the only option with a genuinely free tier that covers both items 4 and 5. One call gives the whole board, and each flight already includes registration, aircraft model and distance. A separate endpoint gives an aircraft photo with author and licence, which matches how we credit Wikimedia photos.

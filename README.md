@@ -11,8 +11,10 @@ Airport dashboard for desktop and phone browsers. Plain HTML, CSS and JavaScript
 - Airport and city photos from Wikimedia Commons for about half of all airports (most large airports), each with author, licence and a link to the original. Airports without a freely licensed photo show a styled panel. A photo that fails to load also falls back to that panel.
 - Live weather for every airport: the latest METAR (decoded into wind, visibility, ceiling, conditions and a plain-English reading) and TAF from aviationweather.gov, and a forecast for the next hours from MET Norway. Airports without a reporting METAR station say so and show only the forecast, labelled as a forecast. The weather refreshes every 10 minutes while the page is open; if a refresh fails, the last data stays visible with a warning and its time. METARs older than 90 minutes are flagged.
 
+- Flight board from AeroDataBox (once the key is set): departures and arrivals from 2 hours ago to 10 hours ahead, with scheduled and estimated/actual times, status, terminal, gate or baggage belt, aircraft model and registration. Airports without live coverage are labelled "schedule only". Flight details show only what the provider supplies (registration, distance, scheduled flight time, a representative aircraft photo with credit); everything else says "Not available". "Last updated" shows when the board was fetched; old data is labelled.
+
 ## Still demo data (clearly labelled in the app)
-- Flights: sample board for SEA only. Other airports show "No flight data yet".
+- Flights, only while no AeroDataBox key is set: sample board for SEA. Other airports say flight data is not connected yet.
 - Aircraft photo in the flight detail: one illustrative Unsplash photo, labelled "not this aircraft".
 
 ## Run locally
@@ -40,10 +42,17 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - `public/js/airports.js` — airport search, lookup and URL handling
 - `public/js/photos.js` — loads photos and builds the credit line
 - `public/js/weather.js` — loads weather from `/api/weather/<IATA>` and formats it
-- `public/js/demo-data.js` — all demo values in one place (flights only now)
+- `public/js/flights.js` — loads flights from `/api/flights/<IATA>` and formats them
+- `public/js/flight-model.js` — the normalized Flight/Aircraft model and status rules (shared with the tests)
+- `public/js/demo-data.js` — demo flights (SEA), used only while no flight key is set
 - `public/js/app.js` — page logic
 - `netlify/functions/weather.mjs` — the `/api/weather/<IATA>` function: input check, airport lookup, cache headers, rate limit
 - `netlify/lib/weather.mjs` — calls the weather providers and decodes their answers
+- `netlify/functions/flights.mjs` — the `/api/flights/<IATA>` function
+- `netlify/lib/flights/aerodatabox.mjs` — AeroDataBox adapter (provider answer → Flight model)
+- `netlify/lib/flights/board.mjs` — stored boards, monthly budget, stale and quota states
+- `netlify/lib/airports.mjs` — airport lookup shared by the functions
+- `docs/flight-providers.md` — provider comparison and why AeroDataBox
 - `scripts/` — airport and photo data builders, local server
 - `tests/` — tests (`node --test`)
 - `netlify.toml` — publish folder, functions folder and the `/airport/*` address rule
@@ -57,6 +66,7 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 | [Wikimedia Commons](https://commons.wikimedia.org) | Airport and city photos | Per photo, shown in the app: public domain, CC0, CC BY or CC BY-SA |
 | [NOAA Aviation Weather Center](https://aviationweather.gov/data/api/) | METAR and TAF | US government data, public domain |
 | [MET Norway](https://api.met.no/) | Forecast (Locationforecast 2.0) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), credited in the app |
+| [AeroDataBox](https://aerodatabox.com/) via RapidAPI | Flights, aircraft model/registration, representative aircraft photos | Basic plan: non-commercial, attribution required (shown on the board) |
 | [Unsplash](https://unsplash.com) | One illustrative aircraft photo (demo flight detail) | Unsplash licence |
 
 ### Weather function
@@ -64,6 +74,14 @@ Takes 10–20 minutes. Asks Wikidata which photo and city belong to each airport
 - Caching: Netlify's CDN keeps a complete answer for 5 minutes (`durable`, then up to 10 more minutes stale while refreshing). An answer with a failed part is kept 1 minute. Warm function instances also remember provider answers (METAR 5 min, TAF 15 min, forecast until MET Norway's `Expires`).
 - Rate limit: 60 requests per minute per visitor IP (`config.rateLimit`).
 - Each part reports `ok`, `none` (e.g. no station) or `error`; a field the provider does not report stays empty and shows "Not reported".
+
+### Flights function
+`GET /api/flights/OTP` calls AeroDataBox (one call = departures + arrivals, 2 units). The key is read from the Netlify environment variable `AERODATABOX_RAPIDAPI_KEY` (scope: Functions) and never reaches the browser or git. Without it the function answers "unconfigured" and the page shows demo flights for SEA only.
+
+The Basic plan has 400 units (about 200 boards) a month, so:
+- each airport's board is stored in Netlify Blobs and reused for 25 minutes (and cached on the CDN);
+- a monthly budget (default 180 calls, change with `FLIGHTS_MONTHLY_CALL_CAP`) stops calls before the provider's limit; a "monthly quota" 429 from RapidAPI also stops them until next month. A per-second "Too many requests" 429 is treated as temporary;
+- when no new call is possible, the last stored board is shown, marked as old.
 
 Time zones are matched by ICAO/IATA code. When the two disagree or no match exists (mostly small airfields), the time zone is left empty rather than guessed.
 
