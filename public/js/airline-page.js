@@ -4,7 +4,7 @@
 import { $, esc, fmtNum, field, NA, startPage, fail } from "./page-common.js";
 import { airportPath } from "./airports.js";
 import { airlineForCode, airlinePath, routePath } from "./search.js";
-import { logoFor, airlineBadge } from "./logos.js";
+import { anyLogo, logoTitle, airlineBadge } from "./logos.js";
 
 const code = decodeURIComponent(location.pathname.split("/")[2] || "").trim().toUpperCase();
 const { index, airlines } = await startPage().catch(err => { fail("Couldn't load the airport list", err.message); throw err; });
@@ -17,8 +17,8 @@ async function render() {
   document.title = `${airline.name} — Airport Live`;
   $("aName").textContent = airline.name;
   $("aCodes").innerHTML = [airline.iata && `IATA <b>${esc(airline.iata)}</b>`, airline.icao && `ICAO <b>${esc(airline.icao)}</b>`].filter(Boolean).join(" · ");
-  const logo = logoFor(airline);
-  $("aLogo").innerHTML = logo ? `<img src="${esc(logo.src)}" alt="${esc(airline.name)} logo" title="${esc([logo.author, logo.licence].filter(Boolean).join(" · "))} (Wikimedia Commons)">` : airlineBadge({ airline, number: airline.iata || airline.icao });
+  const logo = anyLogo(airline);
+  $("aLogo").innerHTML = logo ? `<img src="${esc(logo.src)}" alt="${esc(airline.name)} logo" title="${esc(logoTitle(logo))}">` : airlineBadge({ airline, number: airline.iata || airline.icao });
   // Other airlines that use the same IATA code (codes get reused).
   const same = airline.iata ? (airlines.byIata.get(airline.iata) || []).filter(a => a !== airline) : [];
   $("aAlso").innerHTML = same.length ? `The code ${esc(airline.iata)} is also listed for ${same.slice(0, 4).map(a => `<a href="${esc(airlinePath(a))}">${esc(a.name)}</a>`).join(", ")}.` : "";

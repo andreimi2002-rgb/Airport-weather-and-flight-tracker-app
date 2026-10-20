@@ -70,3 +70,23 @@ test("generated logo data is sane", () => {
     assert.ok(l.licence && l.page);
   }
 });
+
+test("logo: the board's short name picks the airline when it is the start of exactly one name", async () => {
+  const { logoFor } = await import("../public/js/logos.js");
+  const tk = { TK: [L("AJet", ["TKJ", "THY"], "/ajet.png"), L("Turkish Airlines", ["THY"], "/tk.png")] };
+  assert.equal(logoFor({ iata: "TK", icao: "THY", name: "Turkish" }, tk).src, "/tk.png");
+  assert.equal(logoFor({ iata: "TK", icao: "THY", name: "AJet" }, tk).src, "/ajet.png");
+});
+
+test("CDN logo: only without a Commons logo and when the IATA code isn't shared by active airlines", async () => {
+  const { cdnLogo, anyLogo, setAirlineCodes, setLogos } = await import("../public/js/logos.js");
+  setLogos(logos);
+  setAirlineCodes([{ iata: "MU", icao: "CES", routes: 900 }, { iata: "MU", icao: "OTT", routes: 3 }, { iata: "XX", icao: "AAA", routes: 5 }, { iata: "XX", icao: "BBB", routes: 5 }, { iata: "CI", icao: "CAL", routes: 300 }]);
+  assert.equal(cdnLogo({ iata: "CI", name: "China" }).src, "/api/airline-logo/CI");
+  assert.equal(cdnLogo({ iata: "MU", icao: "CES", name: "China Eastern" }).src, "/api/airline-logo/MU"); // shared code, main airline
+  assert.equal(cdnLogo({ iata: "MU", icao: "OTT", name: "Other" }), null);                              // shared code, not the main one
+  assert.equal(cdnLogo({ iata: "MU", name: "No ICAO" }), null);
+  assert.equal(cdnLogo({ iata: "A2", name: "Animawings" }).src, "/api/airline-logo/A2"); // not in our list: nothing conflicts
+  assert.equal(anyLogo({ iata: "W4", name: "Wizz Air Malta" }).src, "/w4.png"); // Commons first
+  setAirlineCodes([]);
+});
