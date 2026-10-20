@@ -707,3 +707,14 @@ body.wall{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow
 .fd-follow{flex:none}
 .fd-follow.on{color:var(--amber);border-color:var(--amber)}
 @media(max-width:760px){.mf-route{display:none}}
+
+/* ---------- Approaching now (airport page, side column) ---------- */
+.approach-list{display:grid;gap:6px;margin-top:10px}
+.ap-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:9px 10px;border:1px solid #213242;border-radius:11px;background:#111c27;color:var(--text);text-decoration:none;font:inherit;text-align:left;cursor:pointer}
+div.ap-row{cursor:default}
+.ap-row:hover{border-color:var(--line2)}
+.ap-main,.ap-nums{display:flex;flex-direction:column;min-width:0}
+.ap-nums{align-items:flex-end;flex:none}
+.ap-main b{font-size:13px}
+.ap-main span,.ap-nums span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-nums b{font:700 13px var(--mono)}
