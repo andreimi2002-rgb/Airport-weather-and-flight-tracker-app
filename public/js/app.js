@@ -10,6 +10,7 @@ import { punctuality, hourlyTraffic, topBy, airlineKey, routeKey, aircraftKey, l
 import { trafficSvg, forecastSvg } from "./charts.js";
 import { loadLogos, airlineBadge } from "./logos.js";
 import { mountSearch } from "./search-ui.js";
+import { mountMyFlights, toggleFollow, isFollowed } from "./my-flights.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const NA = "Not available";
@@ -641,7 +642,7 @@ function renderFlightDrawer() {
   }
 
   $("flightBody").innerHTML = `
-    <div class="fd-head">${alBadge(f)}<div><h2 id="detailTitle">${esc(f.number)}</h2><div class="sub">${esc([f.airline.name, f.callSign && "Call sign " + f.callSign].filter(Boolean).join(" · ") || NA)}</div></div><span class="status ${st.cls}">${esc(st.label)}</span></div>
+    <div class="fd-head">${alBadge(f)}<div><h2 id="detailTitle">${esc(f.number)}</h2><div class="sub">${esc([f.airline.name, f.callSign && "Call sign " + f.callSign].filter(Boolean).join(" · ") || NA)}</div></div><span class="status ${st.cls}">${esc(st.label)}</span>${f.demo ? "" : `<button class="ghost fd-follow${isFollowed(f) ? " on" : ""}" id="followBtn" type="button" aria-pressed="${isFollowed(f)}">${isFollowed(f) ? "★ Following" : "☆ Follow"}</button>`}</div>
     <div class="route">
       <div class="route-ends">${routeEnd(dep, depAp, "from")}<div class="route-mid">${dur ? `<div class="dur">${esc(dur)}</div>scheduled` : ""}${dist !== null ? `<div>${fmtNum(dist)} km</div>` : ""}</div>${routeEnd(arr, arrAp, "to")}</div>
       ${track}
@@ -664,6 +665,8 @@ function renderFlightDrawer() {
     </div>`;
   const btn = $("checkFlightBtn");
   if (btn) btn.onclick = checkFlight;
+  const follow = $("followBtn");
+  if (follow) follow.onclick = () => { const on = toggleFollow(f, current.iata); showToast(on ? `Following ${f.number}: it shows at the top of every page` : `Stopped following ${f.number}`); renderFlightDrawer(); };
 }
 
 // The drawer found this flight's aircraft in live data: keep it for the
@@ -867,6 +870,8 @@ const search = mountSearch({
   isFavorite,
 });
 const openPicker = search.open;
+// Followed flights, under the header (my-flights.js).
+mountMyFlights({ getIndex: () => index });
 
 // ---------- favourites ----------
 function updateFavorite() {

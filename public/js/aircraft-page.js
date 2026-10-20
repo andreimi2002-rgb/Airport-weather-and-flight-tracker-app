@@ -4,6 +4,7 @@ import { indexAirports, airportPath } from "./airports.js";
 import { fetchAircraft, fetchAircraftPhoto, fetchAircraftNow, fetchAircraftFlights, aircraftFields, liveFields, liveProgressPct, aircraftPath, hhmm, statusView, placeName, LIVE_FRESH_MS } from "./flights.js";
 import { haversineKm, relative } from "./insights.js";
 import { mountSearch } from "./search-ui.js";
+import { mountMyFlights } from "./my-flights.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -19,6 +20,7 @@ let index = null, details = null, now = null, photo = null;
 
 // The same search window as on the other pages (airports, airlines, routes, flights, aircraft).
 mountSearch({ button: $("chooseBtn"), getIndex: () => index });
+mountMyFlights({ getIndex: () => index });
 
 function fail(title, text) {
   $("statusTitle").textContent = title;

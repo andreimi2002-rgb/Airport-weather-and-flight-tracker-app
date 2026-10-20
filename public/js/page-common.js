@@ -3,6 +3,7 @@
 import { indexAirports } from "./airports.js";
 import { mountSearch, loadAirlines } from "./search-ui.js";
 import { loadLogos } from "./logos.js";
+import { mountMyFlights } from "./my-flights.js";
 import { fetchWeather, iconFor, fmtTemp } from "./weather.js";
 
 export const $ = id => document.getElementById(id);
@@ -17,6 +18,7 @@ export const loadIndex = () => (indexP ??= fetch("/data/airports.json").then(r =
 // Header search (same window as on the airport pages) + the lists it needs.
 export function startPage() {
   mountSearch({ button: $("chooseBtn"), getIndex: () => indexValue });
+  mountMyFlights({ getIndex: () => indexValue });
   return Promise.all([loadIndex(), loadAirlines(), loadLogos()]).then(([index, airlines]) => ({ index, airlines }));
 }
 
