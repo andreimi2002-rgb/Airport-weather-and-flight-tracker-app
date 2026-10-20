@@ -2,7 +2,7 @@
 // airlines, routes, flights and aircraft (search.js). Opens with the search
 // button, "/" or Ctrl/Cmd+K; arrows + Enter or a click to go; Esc closes.
 import { searchAll, indexAirlines } from "./search.js";
-import { logoFor, loadLogos } from "./logos.js";
+import { anyLogo, loadLogos } from "./logos.js";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const fmtClock = tz => { try { return new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()); } catch { return ""; } };
@@ -16,7 +16,7 @@ const MODAL = `<div class="modal-backdrop" id="airportModal" role="dialog" aria-
 
 const ARROW = `<span aria-hidden="true">→</span>`;
 function airlineIcon(a) {
-  const logo = logoFor({ iata: a.iata, icao: a.icao, name: a.name });
+  const logo = anyLogo({ iata: a.iata, icao: a.icao, name: a.name });
   return logo ? `<span class="ao-ic ao-logo"><img src="${esc(logo.src)}" alt="" loading="lazy"></span>` : `<span class="ao-ic">✈</span>`;
 }
 

@@ -21,6 +21,7 @@ createServer(async (req, res) => {
     [/^\/api\/airport-live\/([^/]+)$/, m => ["aircraft-live", { code: m[1] }]],
     [/^\/api\/airline-routes\/([^/]+)$/, m => ["aircraft-live", { icao: m[1] }]],
     [/^\/api\/stats\/([^/]+)\/([^/]+)$/, m => ["stats", { code: m[1], date: m[2] }]],
+    [/^\/api\/airline-logo\/([^/]+)$/, m => ["airline-logo", { iata: m[1] }]],
     [/^\/api\/flight-status\/([^/]+)\/([^/]+)$/, m => ["flight-details", { number: m[1], date: m[2] }]],
     [/^\/api\/aircraft-flights\/([^/]+)\/([^/]+)$/, m => ["flight-details", { reg: m[1], date: m[2] }]],
     [/^\/api\/live\/([^/]+)$/, m => ["aircraft-live", { callsign: m[1] }]],

@@ -121,3 +121,8 @@ In review (2026-10-20): `feature/universal-search` (based on feature/board-live-
 
 In review (2026-10-20): `feature/release-phase1` (owner chose one release for 1.1-1.4, exception to one-PR-per-item; stats kept 90 days). 1.1 `netlify/lib/flights/stats.mjs`: per-flight daily records from each new board (no extra units) in the `flights` store, `/api/stats/<IATA>/<date>` summary. 1.2 wall rows link to `/airport/X?flight=…`, city to its airport. 1.3 `public/js/my-flights.js`: follow from the drawer (localStorage `airportLive.myFlights`, dropped 1 day after arrival), strip under the header on every page, live status via airport-live + matchBoardLive. 1.4 'Approaching now' side panel (`approaching()` in flights.js) from the same airport-live answer, also shown without a board; ETA = distance / ground speed, labelled estimate. Next: phase 2 statistics pages once data has accumulated (3-4 weeks).
 
+
+In review (2026-10-20): `feature/logo-fallback` (based on feature/release-phase1). Owner chose: Wikimedia logo first, CDN only where it's missing. `/api/airline-logo/:iata` (netlify/functions/airline-logo.mjs) proxies pics.avs.io (Aviasales logo CDN) so visitors never contact it, CDN-cached 30 days; `cdnLogo` in logos.js uses it only when the IATA code has at most one active airline in airlines.json, or the flight's ICAO is the code's main airline (most routes). Turkish fixed: the board says 'Turkish', now matched as the start of 'Turkish Airlines'. City photos stay as they are (owner, 2026-10-20; LA photo is really LA with Mount Baldy).
+
+BEFORE A PUBLIC LAUNCH (owner: not soon): the CDN logos have no published licence for other sites; replace or remove them (e.g. Airhex with its terms, or Wikimedia only). Also AeroDataBox Basic is non-commercial only.
+
