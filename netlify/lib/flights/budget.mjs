@@ -20,6 +20,7 @@ export function memoryStore() {
   return {
     async get(key) { return m.has(key) ? structuredClone(m.get(key)) : null; },
     async setJSON(key, value) { m.set(key, structuredClone(value)); },
+    async delete(key) { m.delete(key); },
   };
 }
 
