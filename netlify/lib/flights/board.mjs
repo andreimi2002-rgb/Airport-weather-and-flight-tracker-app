@@ -6,6 +6,7 @@
 //   marked stale, never presented as current.
 import { fetchBoard, PROVIDER, WINDOW } from "./aerodatabox.mjs";
 import { readUsage, canSpend, recordCall, quotaNotice, UNITS, DEFAULT_MONTHLY_UNIT_CAP } from "./budget.mjs";
+import { recordBoard } from "./stats.mjs";
 
 export { memoryStore, monthKey, nextMonthStart } from "./budget.mjs";
 export const FRESH_MS = 25 * 60 * 1000;
@@ -47,6 +48,8 @@ export async function getBoard(airport, { key, store, now = Date.now(), fetchImp
     const to = new Date(now + (WINDOW.offsetMinutes + WINDOW.durationMinutes) * 60000).toISOString();
     const stored = { fetchedAt: new Date(now).toISOString(), from, to, ...board };
     await store.setJSON(boardKey, stored);
+    // Free statistics from the board we fetched anyway; never let them break the board.
+    try { await recordBoard(store, airport.iata, stored, now); } catch (err) { console.error("Stats not recorded", err); }
     return { body: response("ok", airport, { board: stored, usage: { units: usage.units, cap } }), cacheSeconds: Math.round(FRESH_MS / 1000) };
   } catch (err) {
     await recordCall(store, now, usage, UNITS.board, { err });

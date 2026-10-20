@@ -117,10 +117,13 @@ function rowHtml(f, now) {
   const h = here(f), o = other(f), st = statusView(f, now, liveById.get(f.id)), up = updateTime(f);
   const sched = hhmm(h.scheduled), changed = up.time !== "—" && up.time !== sched, late = lateMinutes(f);
   const gate = f.direction === "arrival" ? (h.baggageBelt || "—") : (h.gate || "—");
-  return `<div class="wall-row s-${st.cls || "ok"}" role="listitem">
+  // The row opens the flight on the airport page (same drawer as there); the city opens that airport.
+  const href = `${airportPath(airport)}?flight=${encodeURIComponent(String(f.number).replace(/\s+/g, "").toUpperCase() + "-" + (f.direction === "departure" ? "d" : "a"))}`;
+  const city = o.airport.iata ? `<a class="w-city" href="/airport/${esc(o.airport.iata)}">${esc(placeName(o.airport))}</a>` : esc(placeName(o.airport));
+  return `<div class="wall-row s-${st.cls || "ok"}" role="link" tabindex="0" data-href="${esc(href)}" aria-label="${esc(f.number)} ${f.direction === "departure" ? "to" : "from"} ${esc(placeName(o.airport))}, ${esc(st.label)}. Open flight details">
     <div class="w-time"><b>${esc(sched)}</b>${changed ? `<span class="w-new${late !== null && late < 0 ? " early" : ""}">→ ${esc(up.time)}</span>` : ""}</div>
     <div class="w-flight">${alBadge(f)}<div><b>${esc(f.number)}</b><span>${esc(f.airline?.name || "")}</span></div></div>
-    <div class="w-place"><b>${esc(placeName(o.airport))}</b><span>${esc(o.airport.iata || "")}</span></div>
+    <div class="w-place"><b>${city}</b><span>${esc(o.airport.iata || "")}</span></div>
     <div class="w-gate">${esc(gate)}${h.terminal ? `<span>T${esc(h.terminal)}</span>` : ""}</div>
     <div class="w-st"><span class="status ${st.cls}">${esc(st.label)}</span></div>
   </div>`;
@@ -178,6 +181,19 @@ async function keepAwake(on) {
 if ("wakeLock" in navigator) {
   $("wWake").hidden = false;
   $("wWake").onclick = () => keepAwake(wake !== "wanted");
+}
+
+// Clickable rows (mouse, touch, keyboard). A link inside a row (the city) goes where it points.
+for (const id of ["wDep", "wArr"]) {
+  $(id).addEventListener("click", e => {
+    if (e.target.closest("a")) return;
+    const row = e.target.closest("[data-href]");
+    if (row) location.href = row.dataset.href;
+  });
+  $(id).addEventListener("keydown", e => {
+    const row = e.target.closest("[data-href]");
+    if (row && (e.key === "Enter" || e.key === " ") && e.target === row) { e.preventDefault(); location.href = row.dataset.href; }
+  });
 }
 
 let resizeT;

@@ -683,3 +683,38 @@ body.wall{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow
   .al-routes{grid-template-columns:1fr}
   .flight-page .fd-head h2{font-size:24px}
 }
+/* Wall board rows open the flight; the city opens its airport. */
+.wall-row[data-href]{cursor:pointer}
+.wall-row[data-href]:hover{background:#111c27}
+.wall-row[data-href]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.w-city{color:inherit;text-decoration:none}
+.w-city:hover{color:var(--accent);text-decoration:underline}
+
+/* ---------- My flights strip (under the header on every page) ---------- */
+.myflights{display:flex;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:thin;padding:8px clamp(16px,2vw,28px);border-bottom:1px solid var(--line);background:#0b1118}
+.myflights[hidden]{display:none}
+.mf-title{flex:none;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-right:4px}
+.mf-chip{flex:none;display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:#0d151e}
+.mf-chip a{display:flex;align-items:center;gap:8px;padding:5px 6px 5px 6px;color:var(--text);text-decoration:none;font-size:12px}
+.mf-chip a:hover{color:var(--accent)}
+.mf-chip .al{width:24px;height:24px;font-size:8.5px;border-radius:7px}
+.mf-chip .al.al-logo img{height:14px}
+.mf-chip b{font-family:var(--mono)}
+.mf-route,.mf-time{color:var(--muted);font-family:var(--mono);font-size:11px}
+.mf-chip .status{font-size:10px;padding:4px 7px}
+.mf-x{border:0;background:transparent;color:var(--dim);font-size:16px;padding:0 9px 0 2px;cursor:pointer}
+.mf-x:hover{color:var(--red)}
+.fd-follow{flex:none}
+.fd-follow.on{color:var(--amber);border-color:var(--amber)}
+@media(max-width:760px){.mf-route{display:none}}
+
+/* ---------- Approaching now (airport page, side column) ---------- */
+.approach-list{display:grid;gap:6px;margin-top:10px}
+.ap-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:9px 10px;border:1px solid #213242;border-radius:11px;background:#111c27;color:var(--text);text-decoration:none;font:inherit;text-align:left;cursor:pointer}
+div.ap-row{cursor:default}
+.ap-row:hover{border-color:var(--line2)}
+.ap-main,.ap-nums{display:flex;flex-direction:column;min-width:0}
+.ap-nums{align-items:flex-end;flex:none}
+.ap-main b{font-size:13px}
+.ap-main span,.ap-nums span{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-nums b{font:700 13px var(--mono)}

@@ -1,7 +1,7 @@
 import { indexAirports, findAirport, searchAirports, parseRoute, airportPath, airportLocation, TYPE_LABELS } from "./airports.js";
 import { demoAircraftPhoto, demoFlights, demoAirportCodes } from "./demo-data.js";
 import { DELAY_THRESHOLD_MIN, isDelayed, isCancelled, isDone, isOverdue } from "./flight-model.js";
-import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath, fetchAirportLive, matchBoardLive } from "./flights.js";
+import { fetchAircraftPhoto, fetchLive, fetchIdentify, flightDigits, callsignFor, typeConflicts, typeDiffers, liveFields, liveStatus, notFoundMessage, asRegistration, aircraftPath, fetchAirportLive, matchBoardLive, approaching } from "./flights.js";
 import { estimatedPosition } from "./insights.js";
 import { fetchFlights, fetchAircraft, fetchFlightStatus, aircraftFields, hhmm, here, other, statusView, isPastFlight, splitBoard, schedMs, updateTime, placeName, fmtDuration, nextFlight, ago, REFRESH_MS as FLIGHTS_REFRESH_MS } from "./flights.js";
 import { getPhotos, creditHtml } from "./photos.js";
@@ -10,6 +10,7 @@ import { punctuality, hourlyTraffic, topBy, airlineKey, routeKey, aircraftKey, l
 import { trafficSvg, forecastSvg } from "./charts.js";
 import { loadLogos, airlineBadge } from "./logos.js";
 import { mountSearch } from "./search-ui.js";
+import { mountMyFlights, toggleFollow, isFollowed } from "./my-flights.js";
 
 const DEFAULT_AIRPORT = "SEA";
 const NA = "Not available";
@@ -108,6 +109,7 @@ function showAirport(a) {
   $("flightSearch").value = "";
   $("statusFilter").value = "all";
   showEarlier = false;
+  $("approachPanel").hidden = true;
   closeDrawer("flightModal"); closeDrawer("weatherModal");
 
   const kind = [TYPE_LABELS[a.type], a.scheduled ? "Scheduled flights" : "No scheduled flights listed"].join(" · ");
@@ -283,8 +285,30 @@ async function loadFlights(a, quiet = false) {
   }
   renderAll();
   openFlightFromUrl();
-  if (flightState.kind === "live") loadBoardLive(a);
+  // Live data also fills "Approaching now" when there's no board (not connected, quota used up);
+  // demo flights (SEA) get no live lookups.
+  if (flightState.kind !== "demo") loadBoardLive(a);
 }
+
+// ---------- approaching now (the same live answer, no extra request) ----------
+function renderApproach(a, aircraft) {
+  const list = approaching(aircraft, a);
+  $("approachPanel").hidden = false;
+  // A board flight matched to the aircraft opens its drawer; otherwise the aircraft page.
+  const byAc = new Map([...matchBoardLive(flightState.flights, aircraft, a.iata)].map(([id, ac]) => [ac, flightState.flights.find(f => f.id === id)]));
+  $("approachList").innerHTML = list.length ? list.map(({ ac, km, etaMin }) => {
+    const f = byAc.get(ac), from = lookup(ac.from);
+    const name = f ? f.number : ac.callsign;
+    const inner = `<div class="ap-main"><b class="mono">${esc(name)}</b><span>from ${esc(from?.city || ac.from)}</span></div><div class="ap-nums"><b>${fmtNum(km)} km</b><span>${ac.altitudeFt != null ? fmtNum(ac.altitudeFt) + " ft" : ""}${etaMin ? ` · ≈ ${etaMin} min` : ""}</span></div>`;
+    return f ? `<button class="ap-row" type="button" data-id="${esc(f.id)}">${inner}</button>`
+      : ac.registration ? `<a class="ap-row" href="${esc(aircraftPath(ac.registration))}">${inner}</a>` : `<div class="ap-row">${inner}</div>`;
+  }).join("") : `<div class="none">No aircraft on approach to ${esc(a.iata)} in live data right now.</div>`;
+  $("approachNote").textContent = list.length ? "Within 250 nm. Arrival time ≈ distance ÷ ground speed: an estimate, not an airline time." : "";
+}
+$("approachList").addEventListener("click", e => {
+  const b = e.target.closest("button[data-id]");
+  if (b) openFlight(flightState.flights.find(f => f.id === b.dataset.id), b);
+});
 
 // ---------- live statuses for the whole board (adsb.lol + VRS routes, free) ----------
 const BOARD_LIVE_MS = 8 * 60 * 1000;
@@ -294,7 +318,9 @@ async function loadBoardLive(a) {
   if (!Number.isFinite(a.lat)) return;
   let body;
   try { body = await fetchAirportLive(a.iata); } catch { return; }
-  if (current !== a || flightState.kind !== "live" || body.status !== "ok") return;
+  if (current !== a || body.status !== "ok") return;
+  renderApproach(a, body.aircraft);
+  if (flightState.kind !== "live") return;
   const matches = matchBoardLive(flightState.flights, body.aircraft, a.iata);
   boardLiveAc.clear();
   boardLiveCount = 0;
@@ -641,7 +667,7 @@ function renderFlightDrawer() {
   }
 
   $("flightBody").innerHTML = `
-    <div class="fd-head">${alBadge(f)}<div><h2 id="detailTitle">${esc(f.number)}</h2><div class="sub">${esc([f.airline.name, f.callSign && "Call sign " + f.callSign].filter(Boolean).join(" · ") || NA)}</div></div><span class="status ${st.cls}">${esc(st.label)}</span></div>
+    <div class="fd-head">${alBadge(f)}<div><h2 id="detailTitle">${esc(f.number)}</h2><div class="sub">${esc([f.airline.name, f.callSign && "Call sign " + f.callSign].filter(Boolean).join(" · ") || NA)}</div></div><span class="status ${st.cls}">${esc(st.label)}</span>${f.demo ? "" : `<button class="ghost fd-follow${isFollowed(f) ? " on" : ""}" id="followBtn" type="button" aria-pressed="${isFollowed(f)}">${isFollowed(f) ? "★ Following" : "☆ Follow"}</button>`}</div>
     <div class="route">
       <div class="route-ends">${routeEnd(dep, depAp, "from")}<div class="route-mid">${dur ? `<div class="dur">${esc(dur)}</div>scheduled` : ""}${dist !== null ? `<div>${fmtNum(dist)} km</div>` : ""}</div>${routeEnd(arr, arrAp, "to")}</div>
       ${track}
@@ -664,6 +690,8 @@ function renderFlightDrawer() {
     </div>`;
   const btn = $("checkFlightBtn");
   if (btn) btn.onclick = checkFlight;
+  const follow = $("followBtn");
+  if (follow) follow.onclick = () => { const on = toggleFollow(f, current.iata); showToast(on ? `Following ${f.number}: it shows at the top of every page` : `Stopped following ${f.number}`); renderFlightDrawer(); };
 }
 
 // The drawer found this flight's aircraft in live data: keep it for the
@@ -867,6 +895,8 @@ const search = mountSearch({
   isFavorite,
 });
 const openPicker = search.open;
+// Followed flights, under the header (my-flights.js).
+mountMyFlights({ getIndex: () => index });
 
 // ---------- favourites ----------
 function updateFavorite() {
@@ -921,7 +951,7 @@ $("refreshBtn").onclick = () => { if (current) { showAirport(current); showToast
 let resizeT;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(renderTraffic, 200); });
 setInterval(() => { if (current && document.visibilityState === "visible") loadFlights(current, true); }, FLIGHTS_REFRESH_MS);
-setInterval(() => { if (current && flightState.kind === "live" && document.visibilityState === "visible") loadBoardLive(current); }, BOARD_LIVE_MS);
+setInterval(() => { if (current && flightState.kind !== "demo" && document.visibilityState === "visible") loadBoardLive(current); }, BOARD_LIVE_MS);
 // Every minute: refresh age labels, statuses that became overdue, progress (no new request).
 setInterval(() => {
   if (!current || document.visibilityState !== "visible") return;

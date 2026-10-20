@@ -86,3 +86,17 @@ test("route files: large airlines split into -0 … -9 are read and merged", asy
   const routes = await airlineRoutes("WZZ", memoryStore(), now, fetchImpl);
   assert.deepEqual(routes, { WZZ1AB: "LROP-EGGW", WZZ4CD: "LHBP-LIRF" });
 });
+
+test("approaching: airborne to this airport, nearest first, rough arrival estimate", async () => {
+  const { approaching } = await import("../public/js/flights.js");
+  const OTP = { iata: "OTP", lat: 44.5711, lon: 26.085 };
+  const seenAt = new Date(now - 30000).toISOString();
+  const list = approaching([
+    { callsign: "FAR1", to: "OTP", onGround: false, lat: 46.0, lon: 26.0, groundSpeedKt: 450, seenAt },
+    { callsign: "NEAR", to: "OTP", onGround: false, lat: 44.8, lon: 26.0, groundSpeedKt: 200, seenAt },
+    { callsign: "GROUND", to: "OTP", onGround: true, lat: 44.57, lon: 26.08, seenAt },
+    { callsign: "AWAY", to: "LHR", onGround: false, lat: 44.6, lon: 26.0, groundSpeedKt: 300, seenAt },
+  ], OTP, now);
+  assert.deepEqual(list.map(x => x.ac.callsign), ["NEAR", "FAR1"]);
+  assert.ok(list[0].etaMin >= 3 && list[0].etaMin <= 6, String(list[0].etaMin));
+});

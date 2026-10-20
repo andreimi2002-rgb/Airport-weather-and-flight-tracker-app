@@ -192,6 +192,22 @@ export function matchBoardLive(flights, aircraft, code, now = Date.now()) {
   return out;
 }
 
+// "Approaching now": airborne aircraft whose route ends at this airport, nearest
+// first, with distance and a rough arrival estimate (distance / ground speed;
+// not a provider time, labelled as an estimate on the page).
+export function approaching(aircraft, airport, now = Date.now(), limit = 6) {
+  return (aircraft || [])
+    .filter(ac => ac.to === airport.iata && !ac.onGround && Number.isFinite(ac.lat) && now - Date.parse(ac.seenAt) < LIVE_FRESH_MS)
+    .map(ac => {
+      const km = haversineKm(ac, airport);
+      const kmh = (ac.groundSpeedKt ?? 0) * 1.852;
+      return { ac, km, etaMin: km !== null && kmh > 90 ? Math.max(1, Math.round((km / kmh) * 60)) : null };
+    })
+    .filter(x => x.km !== null)
+    .sort((a, b) => a.km - b.km)
+    .slice(0, limit);
+}
+
 // "yr-asa " -> "YR-ASA"; null when it can't be a registration. Search also
 // needs a hyphen or a US "N" number, so airport codes and words don't match.
 export function asRegistration(s) {
